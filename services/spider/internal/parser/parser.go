@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 
 	"golang.org/x/net/html"
@@ -18,6 +19,7 @@ type Data struct {
 // Html id function tacks an HTML document and will return a
 // pointer for Data struct content
 func Html(r io.Reader) (*Data, error) {
+	fmt.Println("Start parsing HTML content")
 	doc, err := html.Parse(r)
 	if err != nil {
 		fmt.Println("in Html, fail to pars HTML content\n Error: ", err)
@@ -74,6 +76,47 @@ func getNodes(node *html.Node) (urls []*html.Node, imgs []*html.Node, cnt []stri
 		urls = append(urls, u...)
 		imgs = append(imgs, i...)
 		cnt = append(cnt, c...)
+	}
+	return
+}
+
+func Robots(file, userAgent string) (allow, disallow []string, delay int, sitemaps []string) {
+	if userAgent == "" {
+		userAgent = "*"
+	}
+
+	lines := strings.Split(file, "\n")
+	var active bool
+
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		lower := strings.ToLower(line)
+
+		switch {
+		case strings.HasPrefix(lower, "user-agent:"):
+			ua := strings.TrimSpace(line[len("User-agent:"):])
+			active = (ua == userAgent || ua == "*")
+
+		case strings.HasPrefix(lower, "disallow:") && active:
+			disallow = append(disallow, strings.TrimSpace(line[len("Disallow:"):]))
+
+		case strings.HasPrefix(lower, "allow:") && active:
+			allow = append(allow, strings.TrimSpace(line[len("Allow:"):]))
+
+		case strings.HasPrefix(lower, "crawl-delay:") && active:
+			if d, err := strconv.Atoi(strings.TrimSpace(line[len("Crawl-delay:"):])); err == nil {
+				delay = d
+			}
+
+		case strings.HasPrefix(lower, "sitemap:"):
+			sitemaps = append(sitemaps, strings.TrimSpace(line[len("Sitemap:"):]))
+		}
+	}
+	if delay == 0 {
+		delay = 5
 	}
 	return
 }
