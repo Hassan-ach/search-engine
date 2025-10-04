@@ -1,9 +1,15 @@
 package main
 
 import (
+	"fmt"
+
 	"spider/internal/crawler"
 )
 
 func main() {
-		crawler.NewCrawler("https://www.spaceappschallenge.org/2025/find-a-team/tabrmajit/")
+	c, err := crawler.NewCrawler()
+	if err != nil {
+		fmt.Println(err)
+	}
+	c.Crawl()
 }

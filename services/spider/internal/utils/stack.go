@@ -1,11 +1,13 @@
 package utils
 
+import "fmt"
+
 type Stack[T any] struct {
 	Elements []T
 }
 
-func (s *Stack[T]) Push(t T) {
-	s.Elements = append(s.Elements, t)
+func (s *Stack[T]) Push(t ...T) {
+	s.Elements = append(s.Elements, t...)
 }
 
 func (s *Stack[T]) Pop() (T, bool) {
@@ -32,4 +34,10 @@ func (s Stack[T]) Size() int {
 
 func (s Stack[T]) Empty() bool {
 	return s.Size() == 0
+}
+
+func (s Stack[T]) Print() {
+	for _, e := range s.Elements {
+		fmt.Printf("%v\n", e)
+	}
 }

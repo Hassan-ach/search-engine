@@ -12,7 +12,7 @@ func UrlClean(url string) *url.URL {
 	return nil
 }
 
-func GetReq(url string, MaxRetry uint8) (body []byte, err error) {
+func GetReq(url string, MaxRetry int) (body []byte, err error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	req.Header.Set(
@@ -23,16 +23,16 @@ func GetReq(url string, MaxRetry uint8) (body []byte, err error) {
 	req.Header.Set("Accept-Language", "en-US")
 
 	if err != nil {
-		fmt.Printf("Request initialization failed\n%v", err)
+		fmt.Printf("Request initialization failed\n ERROR: %v\n", err)
 		return nil, err
 	}
-	for attempt := 0; attempt < int(MaxRetry) || err != nil; attempt++ {
+	for attempt := 0; attempt < MaxRetry || err != nil; attempt++ {
 		if attempt != 0 {
 			time.Sleep(5 * time.Second)
 		}
 		res, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("retry %d failed\nURL: %s", attempt+1, url)
+			fmt.Printf("retry %d failed\nURL: %s\nERROR: %v\n", attempt+1, url, err)
 			continue
 		}
 		defer res.Body.Close()
@@ -46,7 +46,7 @@ func GetReq(url string, MaxRetry uint8) (body []byte, err error) {
 			continue
 		}
 		if err != nil {
-			fmt.Printf("In GetReq error while reading the response body:  %v", err)
+			fmt.Printf("In GetReq error while reading the response body:  %v\n", err)
 			continue
 		}
 		return body, nil

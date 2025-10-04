@@ -1,10 +1,13 @@
 package crawler
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 
 	"spider/internal/parser"
+	"spider/internal/store"
 	"spider/internal/utils"
 )
 
@@ -12,34 +15,94 @@ type Engine struct {
 	Urls []string
 }
 
-func NewCrawler(domain string) (*Crawler, error) {
-	url, err := url.Parse(domain)
+func NewCrawler() (*Crawler, error) {
+	domain, ok := store.NewUrl()
+	if !ok {
+		return nil, errors.New("Fail to retrive new Url from the store")
+	}
+	fmt.Printf("Creating new Crawler for %s\n", domain)
+	u, err := url.Parse(domain)
 	if err != nil {
 		fmt.Println("Fail to Parse domain url")
 	}
-	url.RawQuery = ""
-	url.Fragment = ""
-	url.Path = "/robots.txt"
-	fmt.Println(url.String())
-	body, err := utils.GetReq(url.String(), 1)
-	if err != nil {
-		fmt.Printf("Fail to GetReq\n%v", err)
+	if strings.Index(u.Host, "www.") == 0 {
+		u.Host = u.Host[4:]
 	}
-	allowed, disallow, delay, sitemaps := parser.Robots(string(body), "*")
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.Path = "/robots.txt"
+	fmt.Println(u.String())
+	body, err := utils.GetReq(u.String(), 3)
+	if err != nil {
+		fmt.Printf("Fail to GetReq\nERROR: %v\n", err)
+		return nil, err
+	}
+	allowed, disallow, delay, sitemapsURLs := parser.Robots(string(body), "*")
+	sitemaps := sitemapsProcess(sitemapsURLs, u.Host)
+	// fmt.Printf("ALLOWED URLs: %s\n", strings.Join(allowed, "\n"))
+	// fmt.Printf("NOT ALLOWED URLs: %s\n", strings.Join(disallow, "\n"))
+	// fmt.Printf("SITEMAPS URLs: %s\n", strings.Join(sitemaps, "\n"))
+	discovedUrls := utils.NewSetQueu[string]()
+	for _, v := range sitemaps {
+		t, err := urlClean(v, u.Host)
+		if err != nil {
+			continue
+		}
+		discovedUrls.Push(t)
+	}
+	// fmt.Printf("Discoved URLs:\n")
+	// discovedUrls.Print()
+
 	crawler := Crawler{
-		MaxRetry: 5,
-		Delay:    delay,
-		MaxPages: 10,
-		StartUrl: domain,
-		DiscovedURLs: utils.Stack[string]{
-			Elements: sitemaps,
-		},
-		VisitedURLs: utils.Set[string]{
-			Elements: make(map[string]bool),
+		MaxRetry:     5,
+		Delay:        delay,
+		MaxPages:     10,
+		Host:         u.Host,
+		DiscovedURLs: discovedUrls,
+		VisitedURLs: &utils.Set[string]{
+			Elements: map[string]bool{},
 		},
 		AllowedUrls:   allowed,
 		NotAllwedUrls: disallow,
 	}
 	fmt.Println(crawler)
 	return &crawler, nil
+}
+
+func sitemapsProcess(s []string, host string) []string {
+	fmt.Println("Start processing SiteMaps")
+	var r []string
+	for _, url := range s {
+		file, err := utils.GetReq(url, 1)
+		if err != nil {
+			fmt.Printf("error while processing Sitemap %s, error: %v\n", url, err)
+			continue
+		}
+		d, err := parser.SitMap(file)
+		if err != nil {
+			fmt.Printf("error while processing Sitemap %s, error: %v\n", url, err)
+			continue
+		}
+		for _, u := range d {
+			x, err := urlClean(u, host)
+			if err != nil {
+				continue
+			}
+			r = append(r, x)
+		}
+
+	}
+	return r
+}
+
+func urlClean(u string, host string) (string, error) {
+	ob, err := url.Parse(u)
+	if err != nil {
+		fmt.Printf("Error while Cleaning URL: %s\n %v\n", u, err)
+		return "", err
+	}
+	if ob.Host == "" {
+		ob.Host = host
+	}
+	return ob.String(), nil
 }
