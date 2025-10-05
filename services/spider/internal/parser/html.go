@@ -5,6 +5,8 @@ import (
 	"io"
 
 	"golang.org/x/net/html"
+
+	"spider/internal/utils"
 )
 
 // Data is struct that holed the data parsed from HTML page
@@ -24,12 +26,15 @@ func Html(r io.Reader) (*Data, error) {
 		return nil, err
 	}
 	urlNodes, _, _ := getNodes(doc)
-	var urls []string = make([]string, len(urlNodes))
-	for i, node := range urlNodes {
+	var urls []string = make([]string, 0, len(urlNodes))
+	for _, node := range urlNodes {
 		for _, attr := range node.Attr {
 			if attr.Key == "href" {
 				if attr.Val[0] != '#' {
-					urls[i] = attr.Val
+					u, ok := utils.NormalizeUrl(attr.Val, "")
+					if ok {
+						urls = append(urls, u)
+					}
 				}
 			}
 		}

@@ -7,7 +7,9 @@ import (
 )
 
 func main() {
-	c, err := crawler.NewCrawler()
+	engin := crawler.NewEngin()
+	defer engin.CacheClient.Close()
+	c, err := engin.NewCrawler()
 	if err != nil {
 		fmt.Println(err)
 	}

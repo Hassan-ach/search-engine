@@ -1,10 +1,13 @@
 package crawler
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/url"
 	"strings"
+
+	"github.com/redis/go-redis/v9"
 
 	"spider/internal/parser"
 	"spider/internal/store"
@@ -12,10 +15,20 @@ import (
 )
 
 type Engine struct {
-	Urls []string
+	CacheClient *redis.Client
+	Ctx         context.Context
 }
 
-func NewCrawler() (*Crawler, error) {
+func NewEngin() *Engine {
+	ctx := context.Background()
+	e := Engine{
+		CacheClient: store.NewCacheClient(),
+		Ctx:         ctx,
+	}
+	return &e
+}
+
+func (e *Engine) NewCrawler() (*Crawler, error) {
 	domain, ok := store.NewUrl()
 	if !ok {
 		return nil, errors.New("Fail to retrive new Url from the store")
@@ -44,11 +57,7 @@ func NewCrawler() (*Crawler, error) {
 	// fmt.Printf("SITEMAPS URLs: %s\n", strings.Join(sitemaps, "\n"))
 	discovedUrls := utils.NewSetQueu[string]()
 	for _, v := range sitemaps {
-		t, err := urlClean(v, u.Host)
-		if err != nil {
-			continue
-		}
-		discovedUrls.Push(t)
+		discovedUrls.Push(v)
 	}
 	// fmt.Printf("Discoved URLs:\n")
 	// discovedUrls.Print()
@@ -64,6 +73,8 @@ func NewCrawler() (*Crawler, error) {
 		},
 		AllowedUrls:   allowed,
 		NotAllwedUrls: disallow,
+		CacheClient:   e.CacheClient,
+		Ctx:           e.Ctx,
 	}
 	fmt.Println(crawler)
 	return &crawler, nil
@@ -101,8 +112,9 @@ func urlClean(u string, host string) (string, error) {
 		fmt.Printf("Error while Cleaning URL: %s\n %v\n", u, err)
 		return "", err
 	}
-	if ob.Host == "" {
-		ob.Host = host
+	u, ok := utils.NormalizeUrl(ob.String(), host)
+	if !ok {
+		return "", errors.New("Not Allowed Urls")
 	}
-	return ob.String(), nil
+	return u, nil
 }

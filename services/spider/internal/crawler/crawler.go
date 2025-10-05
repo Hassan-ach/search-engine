@@ -1,10 +1,19 @@
 package crawler
 
+// TODO:
+//[] impl DB store for (meta data and html)
+//[] clean the code
+//[] impl proper logger and metric for monitoring
+//[] add comments
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
+
+	"github.com/redis/go-redis/v9"
 
 	"spider/internal/parser"
 	"spider/internal/store"
@@ -22,6 +31,8 @@ type Crawler struct {
 	VisitedURLs   *utils.Set[string]
 	AllowedUrls   []string
 	NotAllwedUrls []string
+	CacheClient   *redis.Client
+	Ctx           context.Context
 }
 
 type MetaData struct {
@@ -35,71 +46,73 @@ type Domain struct {
 }
 
 func (c *Crawler) Crawl() {
-	attempt := 0
+	pages := 0
 	for !c.DiscovedURLs.Empty() {
 		u, ok := c.getUrl()
 		if !ok {
 			continue
 		}
 
-		fmt.Printf("Start Crawing URL: %s\n", u.String())
-		if ok {
-			data, err := c.process(u.String())
-			if err != nil {
-				fmt.Printf("error while crawling URL: %s, ERROR: %v\n", u.String(), err)
-				continue
-			}
-
-			c.VisitedURLs.Add(u.String())
-			c.addUrls(data.Urls)
-			fmt.Println("VisitedURLs:")
-			c.VisitedURLs.Print()
-
-			attempt++
-			if c.MaxPages > 0 && attempt > int(c.MaxPages) {
-				break
-			}
+		fmt.Printf("Start Crawing URL: %s\n", u)
+		data, err := c.process(u)
+		if err != nil {
+			fmt.Printf("error while crawling URL: %s, ERROR: %v\n", u, err)
+			continue
 		}
+
+		c.VisitedURLs.Add(u)
+		pages++
+		c.addUrls(data.Urls)
+		fmt.Printf("Processed %d Pages for this Host: %s\n", pages, c.Host)
+
+		if c.MaxPages > 0 && pages >= c.MaxPages {
+			fmt.Printf("Max pages (%d) reached; stopping", c.MaxPages)
+			break
+		}
+		time.Sleep(time.Duration(c.Delay) * time.Second)
+	}
+	if c.DiscovedURLs.Empty() {
+		fmt.Println("the set is empty")
 	}
 }
 
-func (c *Crawler) getUrl() (*url.URL, bool) {
+func (c *Crawler) getUrl() (string, bool) {
 	s, ok := c.DiscovedURLs.Pop()
 	if !ok {
-		return nil, false
+		return "", false
 	}
 	if c.VisitedURLs.Contains(s) {
-		return nil, false
+		return "", false
 	}
 	u, err := url.Parse(s)
 	if err != nil {
-		return nil, false
+		return "", false
 	}
 	for _, notAllowed := range c.NotAllwedUrls {
 		if strings.HasPrefix(u.Path, notAllowed) {
-			fmt.Println("This is not allowed path, PATH: %s", u.Path)
-			return nil, false
+			fmt.Println("This is not allowed path for this HOST: %s, PATH: %s", u.Host, u.Path)
+			return "", false
 		}
 	}
 	if u.Scheme == "" {
 		u.Scheme = "https"
 	}
 
-	return u, true
+	return u.String(), true
 }
 
 func (c *Crawler) addUrls(s []string) {
 	for _, u := range s {
 		l, err := url.Parse(u)
+		if err != nil {
+			fmt.Printf("Error while adding URL: %s, ERROR: %v\n", u, err)
+			continue
+		}
 		if l.Host == "" {
 			l.Host = c.Host
 		}
 		if l.Scheme == "" {
 			l.Scheme = "https"
-		}
-		if err != nil {
-			fmt.Printf("Error while adding URL: %s, ERROR: %v\n", u, err)
-			continue
 		}
 		if c.VisitedURLs.Contains(l.String()) {
 			continue
@@ -108,7 +121,7 @@ func (c *Crawler) addUrls(s []string) {
 		if l.Host == c.Host {
 			c.DiscovedURLs.Push(l.String())
 		} else {
-			store.AddNewHost(l.String())
+			c.CacheClient.SAdd(c.Ctx, "DiscovedHosts", l.String())
 		}
 	}
 }
@@ -124,6 +137,6 @@ func (c *Crawler) process(u string) (*parser.Data, error) {
 		fmt.Printf("Error while Parsing HTML content:\n\t URL: %s\n", u)
 		return nil, err
 	}
-	go store.PostHtml(u, body)
+	store.PostHtml(u, body)
 	return data, nil
 }
