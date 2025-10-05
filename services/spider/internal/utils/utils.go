@@ -14,9 +14,13 @@ func UrlClean(url string) *url.URL {
 	return nil
 }
 
-func GetReq(url string, MaxRetry int) (body []byte, err error) {
+func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err error) {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
+	if err != nil {
+		fmt.Printf("Request initialization failed\n ERROR: %v\n", err)
+		return
+	}
 	req.Header.Set(
 		"User-Agent",
 		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.118 Safari/537.36",
@@ -24,25 +28,23 @@ func GetReq(url string, MaxRetry int) (body []byte, err error) {
 	req.Header.Set("Accept", "text/html")
 	req.Header.Set("Accept-Language", "en-US")
 
-	if err != nil {
-		fmt.Printf("Request initialization failed\n ERROR: %v\n", err)
-		return nil, err
-	}
-	for attempt := 0; attempt < MaxRetry || err != nil; attempt++ {
+	var res *http.Response
+	for attempt := range maxRetry {
 		if attempt != 0 {
-			time.Sleep(5 * time.Second)
+			time.Sleep(time.Second * time.Duration(delay))
 		}
-		res, err := client.Do(req)
+		res, err = client.Do(req)
 		if err != nil {
 			fmt.Printf("retry %d failed\nURL: %s\nERROR: %v\n", attempt+1, url, err)
 			continue
 		}
+		body, err = io.ReadAll(res.Body)
+		statusCode = res.StatusCode
 		defer res.Body.Close()
-		body, err := io.ReadAll(res.Body)
-		if res.StatusCode > 299 {
+		if statusCode >= 500 || statusCode == 429 {
 			fmt.Printf(
 				"Response failed with status code: %d and\n body: %s\n",
-				res.StatusCode,
+				statusCode,
 				body,
 			)
 			continue
@@ -51,9 +53,9 @@ func GetReq(url string, MaxRetry int) (body []byte, err error) {
 			fmt.Printf("In GetReq error while reading the response body:  %v\n", err)
 			continue
 		}
-		return body, nil
+		return
 	}
-	return nil, err
+	return nil, 0, fmt.Errorf("failed after %d retries: %w", maxRetry, err)
 }
 
 func Filter[T any](s []T, f func(T) bool) []T {
@@ -86,13 +88,14 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 		".mp4", ".avi", ".mov", ".wmv", ".mkv", ".flv", ".webm",
 		".css", ".js", ".ico",
 	}
-
+	if raw == "" {
+		return "", false
+	}
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "", false
 	}
 
-	// Skip extensions
 	pathLower := strings.ToLower(u.Path)
 	for _, ext := range skipExtensions {
 		if strings.HasSuffix(pathLower, ext) {
@@ -100,34 +103,27 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 		}
 	}
 
-	// Skip disallowed paths (prefix match only for flexibility)
 	for _, dis := range disallowPaths {
 		if u.Path == dis || strings.HasPrefix(u.Path, dis) {
 			return "", false
 		}
 	}
 
-	// Skip disallowed query params
 	for _, param := range disallowQueries {
 		if _, ok := u.Query()[param]; ok {
 			return "", false
 		}
 	}
 
-	// Defaults and normalization
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
+	u.Scheme = "https"
+	baseHost = strings.ToLower(strings.TrimPrefix(baseHost, "www."))
 	if u.Host == "" && baseHost != "" {
-		baseHost = strings.ToLower(strings.TrimPrefix(baseHost, "www."))
 		u.Host = baseHost
 	}
-	if u.Host == "" { // Still empty? Invalid
+	if u.Host == "" {
 		return "", false
 	}
-	if strings.HasPrefix(u.Host, "www.") {
-		u.Host = u.Host[4:]
-	}
+	u.Host = strings.TrimPrefix(u.Host, "www.")
 	u.Scheme = strings.ToLower(u.Scheme)
 	u.Host = strings.ToLower(u.Host)
 	u.Fragment = ""
@@ -144,8 +140,8 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 		}
 		u.RawQuery = sorted.Encode()
 	}
-	// Trailing / heuristic
-	if u.Path != "" && !strings.HasSuffix(u.Path, "/") && !strings.Contains(u.Path, ".") {
+	if len(u.Query()) == 0 && u.Path != "" && !strings.HasSuffix(u.Path, "/") &&
+		!strings.Contains(u.Path, ".") {
 		u.Path += "/"
 	}
 

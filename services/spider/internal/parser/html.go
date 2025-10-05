@@ -3,11 +3,15 @@ package parser
 import (
 	"fmt"
 	"io"
+	"strings"
+	"time"
 
 	"golang.org/x/net/html"
 
 	"spider/internal/utils"
 )
+
+// TODO: use the new struct Page to store the data and meta data of each url crawled
 
 // Data is struct that holed the data parsed from HTML page
 type Data struct {
@@ -16,43 +20,50 @@ type Data struct {
 	// Content string
 }
 
+type MetaData struct {
+	Url         string
+	Title       string
+	Description string
+	Type        string
+	SiteName    string
+	Local       string
+	Keywords    []string
+	Icons       []string
+	CrawledAt   time.Time
+}
+
+type Page struct {
+	MetaData
+	StatusCode int
+	HTML       []byte
+	// Text       string
+	Images []string
+	Links  []string
+}
+
 // Html id function tacks an HTML document and will return a
 // pointer for Data struct content
-func Html(r io.Reader) (*Data, error) {
+func Html(r io.Reader) (*Page, error) {
 	fmt.Println("Start parsing HTML content")
 	doc, err := html.Parse(r)
 	if err != nil {
 		fmt.Println("in Html, fail to pars HTML content\n Error: ", err)
 		return nil, err
 	}
-	urlNodes, _, _ := getNodes(doc)
-	var urls []string = make([]string, 0, len(urlNodes))
-	for _, node := range urlNodes {
-		for _, attr := range node.Attr {
-			if attr.Key == "href" {
-				if attr.Val[0] != '#' {
-					u, ok := utils.NormalizeUrl(attr.Val, "")
-					if ok {
-						urls = append(urls, u)
-					}
-				}
-			}
-		}
-	}
-	// content := strings.Join(textContent, " ")
-	// content = strings.TrimSpace(
-	// 	content,
-	// )
-	// content = strings.ReplaceAll(content, "\n", " ")
+	urls, imags, desc, metaData := processNodes(doc)
 
-	return &Data{
-		Urls:   urls,
-		Images: nil,
-		// Content: content,
+	metaData.CrawledAt = time.Now()
+	if len(metaData.Description) == 0 {
+		metaData.Description = desc
+	}
+	return &Page{
+		MetaData: metaData,
+		Links:    urls,
+		Images:   imags,
 	}, nil
 }
 
-func getNodes(node *html.Node) (urls []*html.Node, imgs []*html.Node, cnt []string) {
+func processNodes(node *html.Node) (urls []string, imgs []string, desc string, metaData MetaData) {
 	if node == nil {
 		return
 	}
@@ -61,20 +72,96 @@ func getNodes(node *html.Node) (urls []*html.Node, imgs []*html.Node, cnt []stri
 	}
 	if node.Type == html.ElementNode {
 		switch node.Data {
+		case "meta":
+			metaData = getMetaData(node, metaData)
+		case "link":
+			metaData.Icons = append(metaData.Icons, getIcon(node))
 		case "a":
-			urls = append(urls, node)
+			u, ok := utils.NormalizeUrl(getAttr(node, "href"), "")
+			if ok {
+				urls = append(urls, u)
+			}
 		case "img":
-			imgs = append(imgs, node)
+			s := getAttr(node, "src")
+			if s != "" {
+				imgs = append(imgs, s)
+			}
 		}
 	}
-	if node.Type == html.TextNode {
-		cnt = append(cnt, node.Data)
+	if len(desc) < 200 && node.Type == html.TextNode {
+		desc += "\n" + strings.ToLower(strings.TrimSpace(node.Data))
 	}
 	for n := node.FirstChild; n != nil; n = n.NextSibling {
-		u, i, c := getNodes(n)
+		u, i, d, m := processNodes(n)
+		metaData = m
 		urls = append(urls, u...)
 		imgs = append(imgs, i...)
-		cnt = append(cnt, c...)
+		if len(d) > 200 {
+			desc += d
+		}
 	}
 	return
+}
+
+func getAttr(n *html.Node, key string) string {
+	for _, a := range n.Attr {
+		if a.Key == key {
+			return a.Val
+		}
+	}
+	return ""
+}
+
+func getIcon(n *html.Node) string {
+	for _, v := range n.Attr {
+		if v.Key == "rel" && v.Val == "icon" {
+			return getAttr(n, "href")
+		}
+	}
+	return ""
+}
+
+func getMetaProperty(n *html.Node) string {
+	for _, a := range n.Attr {
+		if a.Key == "property" {
+			if strings.HasPrefix(a.Val, "og:") {
+				return a.Val[3:]
+			}
+		}
+		if a.Key == "name" {
+			return a.Val
+		}
+	}
+	return ""
+}
+
+func getMetaContent(n *html.Node) string {
+	for _, a := range n.Attr {
+		if a.Key == "content" {
+			return a.Val
+		}
+	}
+
+	return ""
+}
+
+func getMetaData(n *html.Node, m MetaData) MetaData {
+	//
+	switch getMetaProperty(n) {
+	case "url":
+		m.Url = getMetaContent(n)
+	case "title":
+		m.Title = getMetaContent(n)
+	case "description":
+		m.Description = getMetaContent(n)
+	case "type":
+		m.Type = getMetaContent(n)
+	case "site_name":
+		m.SiteName = getMetaContent(n)
+	case "loca":
+		m.Local = getMetaContent(n)
+	case "keywords":
+		m.Keywords = append(m.Keywords, getMetaContent(n))
+	}
+	return m
 }
