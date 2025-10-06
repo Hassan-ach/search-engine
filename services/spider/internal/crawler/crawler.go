@@ -33,7 +33,7 @@ type Host struct {
 	Delay         int
 	Name          string
 	AllowedUrls   []string
-	NotAllwedUrls []string
+	NotAllwedPaths []string
 	DiscovedURLs  *utils.SetQueu[string]
 	VisitedURLs   *utils.Set[string]
 }
@@ -66,11 +66,11 @@ func (c *Crawler) Crawl() {
 
 		c.VisitedURLs.Add(u)
 		pages++
-		c.addUrls(data.Links)
+		c.addUrls(data.Links.GetAll())
 		fmt.Printf("Processed %d Pages for this Host: %s\n", pages, c.Host.Name)
 
 		if c.MaxPages > 0 && pages >= c.MaxPages {
-			fmt.Printf("Max pages (%d) reached; stopping", c.MaxPages)
+			fmt.Printf("Max pages (%d) reached; stopping\n", c.MaxPages)
 			break
 		}
 		time.Sleep(time.Duration(c.Delay) * time.Second)
@@ -92,7 +92,7 @@ func (c *Crawler) getUrl() (string, bool) {
 	if err != nil {
 		return "", false
 	}
-	for _, notAllowed := range c.NotAllwedUrls {
+	for _, notAllowed := range c.NotAllwedPaths {
 		if strings.HasPrefix(u.Path, notAllowed) {
 			fmt.Printf("This is not allowed path for this HOST: %s, PATH: %s\n", u.Host, u.Path)
 			return "", false
@@ -121,7 +121,6 @@ func (c *Crawler) addUrls(s []string) {
 		if c.VisitedURLs.Contains(l.String()) {
 			continue
 		}
-		fmt.Println(l.String())
 		if l.Host == c.Host.Name {
 			c.DiscovedURLs.Push(l.String())
 		} else {
@@ -155,6 +154,7 @@ func (c *Crawler) process(u string) (*parser.Page, error) {
 	}
 	page.StatusCode = statusCode
 	page.HTML = body
+
 	store.PostHtml(u, body)
 	return page, nil
 }

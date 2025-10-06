@@ -7,6 +7,7 @@ type SetQueu[T comparable] struct {
 	lookup   map[T]bool // set membership
 }
 
+
 // NewSetQueu initializes a new SetQueu
 func NewSetQueu[T comparable]() *SetQueu[T] {
 	return &SetQueu[T]{

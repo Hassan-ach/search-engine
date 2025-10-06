@@ -62,16 +62,14 @@ func (e *Engine) NewCrawler() (*Crawler, error) {
 
 	crawler := Crawler{
 		Host: Host{
-			MaxRetry:      5,
-			Delay:         delay,
-			MaxPages:      10,
-			Name:          u.Host,
-			AllowedUrls:   allowed,
-			NotAllwedUrls: disallow,
-			DiscovedURLs:  discovedUrls,
-			VisitedURLs: &utils.Set[string]{
-				Elements: map[string]bool{},
-			},
+			MaxRetry:       5,
+			Delay:          delay,
+			MaxPages:       10,
+			Name:           u.Host,
+			AllowedUrls:    allowed,
+			NotAllwedPaths: disallow,
+			DiscovedURLs:   discovedUrls,
+			VisitedURLs:    utils.NewSet[string](),
 		},
 		CacheClient: e.CacheClient,
 		Ctx:         e.Ctx,

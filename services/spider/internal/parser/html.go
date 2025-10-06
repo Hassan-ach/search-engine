@@ -13,13 +13,6 @@ import (
 
 // TODO: use the new struct Page to store the data and meta data of each url crawled
 
-// Data is struct that holed the data parsed from HTML page
-type Data struct {
-	Urls   []string
-	Images []string
-	// Content string
-}
-
 type MetaData struct {
 	Url         string
 	Title       string
@@ -37,8 +30,42 @@ type Page struct {
 	StatusCode int
 	HTML       []byte
 	// Text       string
-	Images []string
-	Links  []string
+	Images *utils.Set[string]
+	Links  *utils.Set[string]
+}
+
+func PrintPage(p Page) {
+	fmt.Println("===== Page Info =====")
+	fmt.Printf("URL: %s\n", p.Url)
+	fmt.Printf("Status Code: %d\n", p.StatusCode)
+	fmt.Printf("Crawled At: %s\n", p.CrawledAt.Format(time.RFC3339))
+	fmt.Println()
+
+	fmt.Println("----- Meta Data -----")
+	fmt.Printf("Title: %s\n", p.Title)
+	fmt.Printf("Description: %s\n", p.Description)
+	fmt.Printf("Type: %s\n", p.Type)
+	fmt.Printf("Site Name: %s\n", p.SiteName)
+	fmt.Printf("Locale: %s\n", p.Local)
+	if len(p.Keywords) > 0 {
+		fmt.Printf("Keywords: %s\n", strings.Join(p.Keywords, ", "))
+	}
+	if len(p.Icons) > 0 {
+		fmt.Printf("Icons: %s\n", strings.Join(p.Icons, ", "))
+	}
+	fmt.Println()
+
+	fmt.Println("----- Links -----")
+	for _, l := range p.Links.GetAll() {
+		fmt.Printf("  - %s\n", l)
+	}
+
+	fmt.Println("----- Images -----")
+	for _, img := range p.Images.GetAll() {
+		fmt.Printf("  - %s\n", img)
+	}
+
+	fmt.Println("=====================")
 }
 
 // Html id function tacks an HTML document and will return a
@@ -56,10 +83,15 @@ func Html(r io.Reader) (*Page, error) {
 	if len(metaData.Description) == 0 {
 		metaData.Description = desc
 	}
+	u := utils.NewSet[string]()
+	u.BatchAdd(urls...)
+	i := utils.NewSet[string]()
+	i.BatchAdd(imags...)
+
 	return &Page{
 		MetaData: metaData,
-		Links:    urls,
-		Images:   imags,
+		Links:    u,
+		Images:   i,
 	}, nil
 }
 
@@ -73,9 +105,12 @@ func processNodes(node *html.Node) (urls []string, imgs []string, desc string, m
 	if node.Type == html.ElementNode {
 		switch node.Data {
 		case "meta":
-			metaData = getMetaData(node, metaData)
+			metaData = mergeMetaData(metaData, getMetaData(node))
 		case "link":
-			metaData.Icons = append(metaData.Icons, getIcon(node))
+			icon := getIcon(node)
+			if icon != "" {
+				metaData.Icons = append(metaData.Icons, icon)
+			}
 		case "a":
 			u, ok := utils.NormalizeUrl(getAttr(node, "href"), "")
 			if ok {
@@ -86,21 +121,61 @@ func processNodes(node *html.Node) (urls []string, imgs []string, desc string, m
 			if s != "" {
 				imgs = append(imgs, s)
 			}
+		case "title":
+			if node.FirstChild != nil && node.FirstChild.Type == html.TextNode {
+				metaData.Title = strings.TrimSpace(node.FirstChild.Data)
+			}
 		}
 	}
-	if len(desc) < 200 && node.Type == html.TextNode {
-		desc += "\n" + strings.ToLower(strings.TrimSpace(node.Data))
+	if node.Type == html.TextNode {
+		text := strings.ToLower(strings.TrimSpace(node.Data))
+		if text != "" {
+			desc += "\n" + text
+		}
 	}
 	for n := node.FirstChild; n != nil; n = n.NextSibling {
 		u, i, d, m := processNodes(n)
-		metaData = m
+		metaData = mergeMetaData(metaData, m)
 		urls = append(urls, u...)
 		imgs = append(imgs, i...)
-		if len(d) > 200 {
-			desc += d
+		if d != "" {
+			desc += strings.TrimSpace(d)
 		}
 	}
+	if len(desc) > 200 {
+		desc = desc[:200]
+	}
+	desc = strings.TrimSpace(desc)
 	return
+}
+
+func getMetaData(n *html.Node) MetaData {
+	prop := getMetaProperty(n)
+	content := getMetaContent(n)
+	if content == "" {
+		return MetaData{}
+	}
+	var m MetaData
+	switch prop {
+	case "url":
+		m.Url = content
+	case "title":
+		m.Title = content
+	case "description":
+		m.Description = content
+	case "type":
+		m.Type = content
+	case "site_name":
+		m.SiteName = content
+	case "locale":
+		m.Local = content
+	case "keywords":
+		m.Keywords = strings.Split(content, ",")
+		for i := range m.Keywords {
+			m.Keywords[i] = strings.TrimSpace(m.Keywords[i])
+		}
+	}
+	return m
 }
 
 func getAttr(n *html.Node, key string) string {
@@ -145,23 +220,26 @@ func getMetaContent(n *html.Node) string {
 	return ""
 }
 
-func getMetaData(n *html.Node, m MetaData) MetaData {
-	//
-	switch getMetaProperty(n) {
-	case "url":
-		m.Url = getMetaContent(n)
-	case "title":
-		m.Title = getMetaContent(n)
-	case "description":
-		m.Description = getMetaContent(n)
-	case "type":
-		m.Type = getMetaContent(n)
-	case "site_name":
-		m.SiteName = getMetaContent(n)
-	case "loca":
-		m.Local = getMetaContent(n)
-	case "keywords":
-		m.Keywords = append(m.Keywords, getMetaContent(n))
+func mergeMetaData(base, other MetaData) MetaData {
+	if other.Url != "" {
+		base.Url = other.Url
 	}
-	return m
+	if other.Title != "" {
+		base.Title = other.Title
+	}
+	if other.Description != "" {
+		base.Description = other.Description
+	}
+	if other.Type != "" {
+		base.Type = other.Type
+	}
+	if other.SiteName != "" {
+		base.SiteName = other.SiteName
+	}
+	if other.Local != "" {
+		base.Local = other.Local
+	}
+	base.Keywords = append(base.Keywords, other.Keywords...)
+	base.Icons = append(base.Icons, other.Icons...)
+	return base
 }
