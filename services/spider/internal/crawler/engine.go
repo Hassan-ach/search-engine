@@ -33,19 +33,20 @@ func NewEngin() *Engine {
 
 func (e *Engine) NewCrawler() (crawler *Crawler, err error) {
 	start := time.Now()
-	log := utils.Log.General().With("operation", "NewCrawler")
+	log := utils.Log.General()
+	log = log.With("operation", "NewCrawler")
 	log.Info("Attempting to create new crawler")
 
 	var host string
 
 	defer func() {
-		execTime := time.Since(start).Seconds()
+		err = store.InProg(host)
+		execTime := time.Since(start)
 		finalLog := log.With("host", host, "execTime", execTime)
 		if err != nil {
 			finalLog.Error("Crawler creation failed", "error", err)
 			return
 		}
-		e.CacheClient.HSet(e.Ctx, "inProg", host, 1)
 		finalLog.Info("Crawler creation completed successfully", "crawler", crawler.String())
 	}()
 
@@ -59,15 +60,15 @@ func (e *Engine) NewCrawler() (crawler *Crawler, err error) {
 	}
 	utils.Log.DB().Info("New host retrieved", "host", host)
 
-	var u *url.URL
-	u, err = url.Parse(host)
-	if err != nil {
-		return nil, err
-	}
-	u.Host = strings.TrimPrefix(u.Host, "www.")
+	var u url.URL
+	host = strings.TrimPrefix(u.Host, "www.")
+	u.Host = host
 	u.RawQuery = ""
 	u.Fragment = ""
 	u.Path = "/robots.txt"
+	if u.Scheme == "" {
+		u.Scheme = "https"
+	}
 	robotsURL := u.String()
 
 	var body []byte
@@ -117,7 +118,7 @@ func sitemapsProcess(s []string, host string) []string {
 			"extractedLinks", len(r),
 			"failedSitemaps", failedSites,
 			"totalSitemaps", len(s),
-			"execTime", time.Since(start).Seconds(),
+			"execTime", time.Since(start),
 		)
 	}()
 

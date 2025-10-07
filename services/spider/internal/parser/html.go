@@ -92,7 +92,7 @@ func Html(r io.Reader) (*Page, error) {
 
 	log.Info(
 		"HTML parsing complete",
-		"execTime", time.Since(start).Seconds(),
+		"execTime", time.Since(start),
 		"linksFound", u.Len(),
 		"imagesFound", i.Len(),
 	)

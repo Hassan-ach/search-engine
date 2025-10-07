@@ -16,7 +16,7 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 	defer func() {
 		log := Log.Network().With(
 			"url", url,
-			"execTime", time.Since(start).Seconds(),
+			"execTime", time.Since(start),
 		)
 		if err != nil {
 			log.Error(

@@ -15,7 +15,7 @@ func main() {
 	defer engin.CacheClient.Close()
 	c, err := engin.NewCrawler()
 	if err != nil {
-		fmt.Println(err)
+		utils.Log.General().Error(fmt.Sprintf("%v", err))
 		os.Exit(1)
 	}
 	c.Crawl()

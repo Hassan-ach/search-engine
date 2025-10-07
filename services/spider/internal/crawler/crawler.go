@@ -65,13 +65,9 @@ func (c *Crawler) Crawl() {
 
 	defer func() {
 		log.Info("Crawl process finished. Performing cleanup.")
-		if err := c.CacheClient.HDel(c.Ctx, "inProg", c.Host.Name).Err(); err != nil {
-			utils.Log.Cache().
-				Error("Failed to delete host from 'inProg' set", "host", c.Host.Name, "error", err)
-		}
-		if err := c.CacheClient.SAdd(c.Ctx, "complHost", c.Host.Name).Err(); err != nil {
-			utils.Log.Cache().
-				Error("Failed to add host to 'complHost' set", "host", c.Host.Name, "error", err)
+		err := store.Completed(c.Host.Name)
+		if err != nil {
+			log.Error("Cleanup Failed", "host", c.Host.Name, "error", err)
 		}
 	}()
 
@@ -173,12 +169,12 @@ func (c *Crawler) addUrls(s []string) {
 			addedToQueue++
 
 		} else {
-			if err := c.CacheClient.SAdd(c.Ctx, l.Host, finalURL).Err(); err != nil {
-				utils.Log.Cache().Error("Failed to add URL to Redis set for other host", "url", finalURL, "host", l.Host, "error", err)
+			if err := store.AddLink(l.Host, finalURL); err != nil {
+				utils.Log.Cache().Debug("Failed to add URL", "url", finalURL, "host", l.Host, "error", err)
 				continue
 			}
-			if err := c.CacheClient.SAdd(c.Ctx, "newHost", l.Host).Err(); err != nil {
-				utils.Log.Cache().Error("Failed to add host to 'newHost' set in Redis", "host", l.Host, "error", err)
+			if err := store.AddHost(l.Host); err != nil {
+				utils.Log.Cache().Debug("Failed to add host", "host", l.Host, "error", err)
 				continue
 			}
 			addedToDiscovery++

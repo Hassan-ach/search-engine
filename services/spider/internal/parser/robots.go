@@ -16,7 +16,7 @@ func Robots(file, userAgent string) (allow, disallow []string, delay int, sitema
 	defer func() {
 		log.Info(
 			"Finished parsing robots.txt",
-			"execTime", time.Since(start).Seconds(),
+			"execTime", time.Since(start),
 			"allowRules", len(allow),
 			"disallowRules", len(disallow),
 			"sitemapsFound", len(sitemaps),

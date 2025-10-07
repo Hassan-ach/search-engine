@@ -2,6 +2,7 @@ package utils
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"log/slog"
 	"os"
@@ -9,12 +10,77 @@ import (
 
 var Log *Logger = NewMultiLogger("appLog.json")
 
+const (
+	colorReset  = "\033[0m"
+	colorRed    = "\033[31m"
+	colorYellow = "\033[33m"
+	colorBlue   = "\033[34m"
+	colorGreen  = "\033[32m"
+	colorGray   = "\033[90m"
+)
+
+func colorForLevel(level slog.Level) string {
+	switch level {
+	case slog.LevelDebug:
+		return colorGray
+	case slog.LevelInfo:
+		return colorGreen
+	case slog.LevelWarn:
+		return colorYellow
+	case slog.LevelError:
+		return colorRed
+	default:
+		return colorBlue
+	}
+}
+
+type SimpleTextHandler struct {
+	attrs []slog.Attr
+}
+
+func (h *SimpleTextHandler) Enabled(_ context.Context, _ slog.Level) bool {
+	return true
+}
+
+func (h *SimpleTextHandler) Handle(_ context.Context, r slog.Record) error {
+	levelColor := colorForLevel(r.Level)
+	level := r.Level.String()
+	msg := r.Message
+
+	// include handler's stored attrs first
+	attrStr := ""
+	for _, a := range h.attrs {
+		attrStr += fmt.Sprintf(" %s=%v", a.Key, a.Value)
+	}
+
+	// then record's attrs
+	r.Attrs(func(a slog.Attr) bool {
+		attrStr += fmt.Sprintf(" %s=%v", a.Key, a.Value)
+		return true
+	})
+
+	fmt.Fprintf(os.Stdout, "%s%s%s %q%s\n",
+		levelColor, level, colorReset, msg, attrStr,
+	)
+	return nil
+}
+
+func (h *SimpleTextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	// create new handler with merged attrs
+	newAttrs := make([]slog.Attr, len(h.attrs)+len(attrs))
+	copy(newAttrs, h.attrs)
+	copy(newAttrs[len(h.attrs):], attrs)
+	return &SimpleTextHandler{attrs: newAttrs}
+}
+
+func (h *SimpleTextHandler) WithGroup(_ string) slog.Handler { return h }
+
 type MultiHandler struct {
 	handlers []slog.Handler
 }
 
 func NewMultiLogger(fileName string) *Logger {
-	txtHandler := slog.NewTextHandler(os.Stdout, nil)
+	txtHandler := &SimpleTextHandler{}
 
 	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {

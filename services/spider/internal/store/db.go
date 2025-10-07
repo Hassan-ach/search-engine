@@ -32,5 +32,5 @@ func PostHtml(u string, b []byte) {
 
 func NewHost() (string, bool) {
 	// TODO: retrive new url from cache
-	return "https://www.spaceappschallenge.org", true
+	return "spaceappschallenge.org", true
 }
