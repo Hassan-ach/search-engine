@@ -49,3 +49,7 @@ func (s Set[T]) Print() {
 		}
 	}
 }
+
+func (s Set[T]) Len() int {
+	return len(s.elements)
+}

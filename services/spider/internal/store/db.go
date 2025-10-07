@@ -30,7 +30,7 @@ func PostHtml(u string, b []byte) {
 	f.Write(b)
 }
 
-func NewUrl() (string, bool) {
+func NewHost() (string, bool) {
 	// TODO: retrive new url from cache
 	return "https://www.spaceappschallenge.org", true
 }

@@ -1,8 +1,6 @@
 package crawler
 
 // TODO:
-//[] impl DB store for (meta data and html)
-//[] impl proper logger and metric for monitoring
 import (
 	"bytes"
 	"context"
@@ -10,8 +8,6 @@ import (
 	"net/url"
 	"strings"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 
 	"spider/internal/parser"
 	"spider/internal/store"
@@ -22,34 +18,63 @@ import (
 // how Crawler can crawl it Host
 type Crawler struct {
 	Host
-	CacheClient *redis.Client
+	CacheClient *store.CacheClient
 	Ctx         context.Context
 }
 
 // Host is type that contain all the roles for a specific host
 type Host struct {
-	MaxRetry      int
-	MaxPages      int
-	Delay         int
-	Name          string
-	AllowedUrls   []string
+	MaxRetry       int
+	MaxPages       int
+	Delay          int
+	Name           string
+	AllowedUrls    []string
 	NotAllwedPaths []string
-	DiscovedURLs  *utils.SetQueu[string]
-	VisitedURLs   *utils.Set[string]
+	DiscovedURLs   *utils.SetQueu[string]
+	VisitedURLs    *utils.Set[string]
+}
+
+func (c *Crawler) String() string {
+	return fmt.Sprintf(
+		"Crawler Info\n"+
+			"  Host: %s\n"+
+			"  MaxRetry: %d\n"+
+			"  MaxPages: %d\n"+
+			"  Delay: %ds\n"+
+			"  Allowed URLs: %v\n"+
+			"  Disallowed Paths: %v\n"+
+			"  Discovered URLs: %d\n"+
+			"  Visited URLs: %d\n"+
+			"  Cache Connected: %v\n",
+		c.Name,
+		c.MaxRetry,
+		c.MaxPages,
+		c.Delay,
+		c.AllowedUrls,
+		c.NotAllwedPaths,
+		c.DiscovedURLs.Len(),
+		c.VisitedURLs.Len(),
+		c.CacheClient != nil,
+	)
 }
 
 // Crawl is entry point for the crawl can start working
 func (c *Crawler) Crawl() {
+	log := utils.Log.General().With("host", c.Host.Name, "operation", "Crawl")
+	log.Info("Starting crawl process for host")
+
 	defer func() {
-		err := c.CacheClient.HDel(c.Ctx, "inProg", c.Host.Name).Err()
-		if err != nil {
-			fmt.Println(err)
+		log.Info("Crawl process finished. Performing cleanup.")
+		if err := c.CacheClient.HDel(c.Ctx, "inProg", c.Host.Name).Err(); err != nil {
+			utils.Log.Cache().
+				Error("Failed to delete host from 'inProg' set", "host", c.Host.Name, "error", err)
 		}
-		err = c.CacheClient.SAdd(c.Ctx, "complHost", c.Host.Name).Err()
-		if err != nil {
-			fmt.Println(err)
+		if err := c.CacheClient.SAdd(c.Ctx, "complHost", c.Host.Name).Err(); err != nil {
+			utils.Log.Cache().
+				Error("Failed to add host to 'complHost' set", "host", c.Host.Name, "error", err)
 		}
 	}()
+
 	pages := 0
 	for !c.DiscovedURLs.Empty() {
 		u, ok := c.getUrl()
@@ -57,47 +82,63 @@ func (c *Crawler) Crawl() {
 			continue
 		}
 
-		fmt.Printf("Start Crawing URL: %s\n", u)
+		log.Info("Processing URL", "url", u)
 		data, err := c.process(u)
 		if err != nil {
-			fmt.Printf("error while crawling URL: %s, ERROR: %v\n", u, err)
+			log.Warn("Failed to process URL", "url", u, "error", err)
 			continue
 		}
 
 		c.VisitedURLs.Add(u)
 		pages++
 		c.addUrls(data.Links.GetAll())
-		fmt.Printf("Processed %d Pages for this Host: %s\n", pages, c.Host.Name)
+		log.Info("Page processed successfully", "host", c.Host.Name, "processedPages", pages)
 
 		if c.MaxPages > 0 && pages >= c.MaxPages {
-			fmt.Printf("Max pages (%d) reached; stopping\n", c.MaxPages)
+			log.Info("Max pages reached; stopping crawl for host", "maxPages", c.MaxPages)
 			break
 		}
 		time.Sleep(time.Duration(c.Delay) * time.Second)
 	}
 	if c.DiscovedURLs.Empty() {
-		fmt.Println("the set is empty")
+		log.Info("Discovered URLs queue is empty; crawl concluded.")
 	}
 }
 
 func (c *Crawler) getUrl() (string, bool) {
+	log := utils.Log.General().With("host", c.Host.Name, "operation", "getUrl")
+
 	s, ok := c.DiscovedURLs.Pop()
 	if !ok {
+		log.Debug("Discovered URLs queue is empty.")
 		return "", false
 	}
 	if c.VisitedURLs.Contains(s) {
+		log.Debug("URL already visited, skipping.", "url", s)
 		return "", false
 	}
+
 	u, err := url.Parse(s)
 	if err != nil {
+		log.Warn("Failed to parse URL, skipping.", "url", s, "error", err)
 		return "", false
 	}
+
 	for _, notAllowed := range c.NotAllwedPaths {
 		if strings.HasPrefix(u.Path, notAllowed) {
-			fmt.Printf("This is not allowed path for this HOST: %s, PATH: %s\n", u.Host, u.Path)
+			log.Debug(
+				"URL path is disallowed, skipping.",
+				"url",
+				s,
+				"path",
+				u.Path,
+				"rule",
+				notAllowed,
+			)
 			return "", false
 		}
 	}
+
 	if u.Scheme == "" {
 		u.Scheme = "https"
 	}
@@ -106,10 +147,14 @@ func (c *Crawler) getUrl() (string, bool) {
 }
 
 func (c *Crawler) addUrls(s []string) {
+	log := utils.Log.General().With("host", c.Host.Name, "operation", "addUrls")
+	addedToQueue := 0
+	addedToDiscovery := 0
+
 	for _, u := range s {
 		l, err := url.Parse(u)
 		if err != nil {
-			fmt.Printf("Error while adding URL: %s, ERROR: %v\n", u, err)
+			log.Warn("Could not parse discovered URL", "url", u, "error", err)
 			continue
 		}
 		if l.Host == "" {
@@ -118,43 +163,54 @@ func (c *Crawler) addUrls(s []string) {
 		if l.Scheme == "" {
 			l.Scheme = "https"
 		}
-		if c.VisitedURLs.Contains(l.String()) {
+		finalURL := l.String()
+
+		if c.VisitedURLs.Contains(finalURL) {
 			continue
 		}
 		if l.Host == c.Host.Name {
 			c.DiscovedURLs.Push(l.String())
+			addedToQueue++
+
 		} else {
-			err := c.CacheClient.SAdd(c.Ctx, l.Host, l.String()).Err()
-			if err != nil {
-				fmt.Printf("Error While Adding URLs to Redis %v\n", err)
+			if err := c.CacheClient.SAdd(c.Ctx, l.Host, finalURL).Err(); err != nil {
+				utils.Log.Cache().Error("Failed to add URL to Redis set for other host", "url", finalURL, "host", l.Host, "error", err)
 				continue
 			}
-			err = c.CacheClient.SAdd(c.Ctx, "newHost", l.Host).Err()
-			if err != nil {
-				fmt.Printf("Error While Adding Host to Redis %v\n", err)
+			if err := c.CacheClient.SAdd(c.Ctx, "newHost", l.Host).Err(); err != nil {
+				utils.Log.Cache().Error("Failed to add host to 'newHost' set in Redis", "host", l.Host, "error", err)
 				continue
 			}
+			addedToDiscovery++
 		}
 	}
+	log.Debug(
+		"URL addition complete",
+		"addedToCurrentQueue",
+		addedToQueue,
+		"addedToGlobalDiscovery",
+		addedToDiscovery,
+	)
 }
 
 func (c *Crawler) process(u string) (*parser.Page, error) {
 	body, statusCode, err := utils.GetReq(u, c.MaxRetry, c.Delay)
 	if err != nil {
-		fmt.Printf("Error while sending GET Request for\n\t URL: %s\n", u)
-		return nil, err
+		return nil, fmt.Errorf("GET request failed: %w", err)
 	}
+
 	page, err := parser.Html(bytes.NewReader(body))
 	if err != nil {
-		fmt.Printf("Error while Parsing HTML content:\n\t URL: %s\n", u)
-		return nil, err
+		utils.Log.Parsing().Error("Failed to parse HTML content", "url", u, "error", err)
+		return nil, fmt.Errorf("HTML parsing failed: %w", err)
 	}
+
 	if page.Url == "" {
 		page.Url = u
 	}
 	page.StatusCode = statusCode
 	page.HTML = body
 
-	store.PostHtml(u, body)
+	// store.PostHtml(u, body)
 	return page, nil
 }

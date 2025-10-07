@@ -7,26 +7,30 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+type CacheClient struct{ *redis.Client }
+
 var (
-	ctx    context.Context = context.Background()
-	client                 = redis.NewClient(&redis.Options{
+	ctx   context.Context = context.Background()
+	Cache                 = NewCacheClient()
+)
+
+func NewCacheClient() *CacheClient {
+	client := redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379",
 		Password: "", // No password set
 		DB:       0,  // Use default DB
 		Protocol: 2,  // Connection protocol
 	})
-)
 
-func NewCacheClient() *redis.Client {
 	_, err := client.Ping(context.Background()).Result()
 	if err != nil {
 		log.Fatalf("Failed to connected to redis %v", err)
 	}
-	return client
+	return &CacheClient{client}
 }
 
-func NewHostName() (string, error) {
-	s, err := client.SPop(ctx, "newHost").Result()
+func PopHost() (string, error) {
+	s, err := Cache.SPop(ctx, "newHost").Result()
 	if err != nil {
 		return "", err
 	}

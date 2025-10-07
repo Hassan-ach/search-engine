@@ -11,8 +11,6 @@ import (
 	"spider/internal/utils"
 )
 
-// TODO: use the new struct Page to store the data and meta data of each url crawled
-
 type MetaData struct {
 	Url         string
 	Title       string
@@ -34,7 +32,7 @@ type Page struct {
 	Links  *utils.Set[string]
 }
 
-func PrintPage(p Page) {
+func (p *Page) String() {
 	fmt.Println("===== Page Info =====")
 	fmt.Printf("URL: %s\n", p.Url)
 	fmt.Printf("Status Code: %d\n", p.StatusCode)
@@ -71,12 +69,16 @@ func PrintPage(p Page) {
 // Html id function tacks an HTML document and will return a
 // pointer for Data struct content
 func Html(r io.Reader) (*Page, error) {
-	fmt.Println("Start parsing HTML content")
+	log := utils.Log.Parsing()
+	log.Info("Starting HTML content parsing")
+	start := time.Now()
+
 	doc, err := html.Parse(r)
 	if err != nil {
-		fmt.Println("in Html, fail to pars HTML content\n Error: ", err)
+		log.Error("Failed to parse HTML content", "error", err)
 		return nil, err
 	}
+
 	urls, imags, desc, metaData := processNodes(doc)
 
 	metaData.CrawledAt = time.Now()
@@ -87,6 +89,13 @@ func Html(r io.Reader) (*Page, error) {
 	u.BatchAdd(urls...)
 	i := utils.NewSet[string]()
 	i.BatchAdd(imags...)
+
+	log.Info(
+		"HTML parsing complete",
+		"execTime", time.Since(start).Seconds(),
+		"linksFound", u.Len(),
+		"imagesFound", i.Len(),
+	)
 
 	return &Page{
 		MetaData: metaData,
@@ -112,9 +121,13 @@ func processNodes(node *html.Node) (urls []string, imgs []string, desc string, m
 				metaData.Icons = append(metaData.Icons, icon)
 			}
 		case "a":
-			u, ok := utils.NormalizeUrl(getAttr(node, "href"), "")
+			rawURL := getAttr(node, "href")
+
+			u, ok := utils.NormalizeUrl(rawURL, "")
 			if ok {
 				urls = append(urls, u)
+			} else {
+				utils.Log.Parsing().Debug("Skipping invalid or unhandled URL", "rawURL", rawURL)
 			}
 		case "img":
 			s := getAttr(node, "src")
@@ -127,12 +140,14 @@ func processNodes(node *html.Node) (urls []string, imgs []string, desc string, m
 			}
 		}
 	}
+
 	if node.Type == html.TextNode {
 		text := strings.ToLower(strings.TrimSpace(node.Data))
 		if text != "" {
 			desc += "\n" + text
 		}
 	}
+
 	for n := node.FirstChild; n != nil; n = n.NextSibling {
 		u, i, d, m := processNodes(n)
 		metaData = mergeMetaData(metaData, m)

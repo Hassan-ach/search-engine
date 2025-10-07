@@ -1,0 +1,82 @@
+{"time":"2025-10-07T18:54:31.277462878+01:00","level":"INFO","msg":"Starting...","Context":"General"}
+{"time":"2025-10-07T18:54:31.277535281+01:00","level":"WARN","msg":"Starting...","Context":"Cache"}
+{"time":"2025-10-07T18:54:31.27754366+01:00","level":"ERROR","msg":"Starting...","Context":"DB"}
+{"time":"2025-10-07T18:54:31.277550206+01:00","level":"INFO","msg":"Starting...","Context":"IO"}
+{"time":"2025-10-07T18:55:55.562111957+01:00","level":"INFO","msg":"Starting...","Context":"General"}
+{"time":"2025-10-07T18:55:55.562180228+01:00","level":"WARN","msg":"Starting...","Context":"Cache"}
+{"time":"2025-10-07T18:55:55.562188912+01:00","level":"ERROR","msg":"Starting...","Context":"DB"}
+{"time":"2025-10-07T18:55:55.562195978+01:00","level":"INFO","msg":"Starting...","Context":"IO"}
+{"time":"2025-10-07T18:56:47.620040451+01:00","level":"INFO","msg":"Starting...","Context":"General"}
+{"time":"2025-10-07T18:56:47.62010886+01:00","level":"WARN","msg":"Starting...","Context":"Cache"}
+{"time":"2025-10-07T18:56:47.620116715+01:00","level":"ERROR","msg":"Starting...","Context":"DB"}
+{"time":"2025-10-07T18:56:47.620123813+01:00","level":"INFO","msg":"Starting...","Context":"IO"}
+{"time":"2025-10-07T18:56:49.081804424+01:00","level":"INFO","msg":"Starting...","Context":"General"}
+{"time":"2025-10-07T18:56:49.081890946+01:00","level":"WARN","msg":"Starting...","Context":"Cache"}
+{"time":"2025-10-07T18:56:49.081898955+01:00","level":"ERROR","msg":"Starting...","Context":"DB"}
+{"time":"2025-10-07T18:56:49.08190567+01:00","level":"INFO","msg":"Starting...","Context":"IO"}
+{"time":"2025-10-07T20:21:04.892615255+01:00","level":"INFO","msg":"Starting...","Context":"General"}
+{"time":"2025-10-07T20:21:04.892680229+01:00","level":"INFO","msg":"Crawler engine initialized","Context":"General"}
+{"time":"2025-10-07T20:21:04.892694381+01:00","level":"INFO","msg":"Attempting to create new crawler","Context":"General","operation":"NewCrawler"}
+{"time":"2025-10-07T20:21:04.892702719+01:00","level":"INFO","msg":"New host retrieved","Context":"DB","host":"https://www.spaceappschallenge.org"}
+{"time":"2025-10-07T20:21:15.733011982+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/robots.txt","execTime":10840270792,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:15.733192055+01:00","level":"INFO","msg":"Starting robots.txt parsing","Context":"Parsing","operation":"Robots"}
+{"time":"2025-10-07T20:21:15.733259563+01:00","level":"INFO","msg":"Finished parsing robots.txt","Context":"Parsing","operation":"Robots","execTime":70353,"allowRules":1,"disallowRules":2,"sitemapsFound":1,"finalCrawlDelay":5}
+{"time":"2025-10-07T20:21:15.733339121+01:00","level":"INFO","msg":"Starting sitemap processing","Context":"General","operation":"sitemapsProcess","host":"spaceappschallenge.org"}
+{"time":"2025-10-07T20:21:16.244727983+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/sitemap.xml","execTime":511315525,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:16.244843578+01:00","level":"INFO","msg":"Starting sitemap.xml parsing","Context":"Parsing","operation":"SitMap"}
+{"time":"2025-10-07T20:21:16.245134085+01:00","level":"INFO","msg":"Successfully parsed sitemap.xml","Context":"Parsing","operation":"SitMap","urlsFound":4}
+{"time":"2025-10-07T20:21:16.245220632+01:00","level":"INFO","msg":"Sitemap processing finished","Context":"General","operation":"sitemapsProcess","host":"spaceappschallenge.org","extractedLinks":4,"failedSitemaps":0,"totalSitemaps":1,"execTime":511896834}
+{"time":"2025-10-07T20:21:16.246194854+01:00","level":"INFO","msg":"Crawler creation completed successfully","Context":"General","operation":"NewCrawler","host":"https://www.spaceappschallenge.org","execTime":11352618666,"crawler":"Crawler Info\n  Host: spaceappschallenge.org\n  MaxRetry: 5\n  MaxPages: 10\n  Delay: 5s\n  Allowed URLs: [/]\n  Disallowed Paths: [/private/ /api/]\n  Discovered URLs: 4\n  Visited URLs: 0\n  Cache Connected: true\n"}
+{"time":"2025-10-07T20:21:16.246319527+01:00","level":"INFO","msg":"Starting crawl process for host","Context":"General","host":"spaceappschallenge.org","operation":"Crawl"}
+{"time":"2025-10-07T20:21:16.24643499+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org"}
+{"time":"2025-10-07T20:21:16.912936119+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org","execTime":666431836,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:16.913062888+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:16.91761165+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":4502205,"linksFound":15,"imagesFound":42}
+{"time":"2025-10-07T20:21:16.920985089+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":1}
+{"time":"2025-10-07T20:21:21.92299585+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/about/"}
+{"time":"2025-10-07T20:21:22.624361121+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/about/","execTime":701221128,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:22.624482472+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:22.629287929+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":4757526,"linksFound":18,"imagesFound":1}
+{"time":"2025-10-07T20:21:22.640313991+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":2}
+{"time":"2025-10-07T20:21:27.641977543+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/resources/"}
+{"time":"2025-10-07T20:21:28.141810847+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/resources/","execTime":499705300,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:28.141947219+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:28.145720478+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":3725693,"linksFound":14,"imagesFound":1}
+{"time":"2025-10-07T20:21:28.154021934+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":3}
+{"time":"2025-10-07T20:21:33.155518627+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/2023/"}
+{"time":"2025-10-07T20:21:33.699816991+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/2023/","execTime":544152085,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:33.699938344+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:33.704332002+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":4356098,"linksFound":14,"imagesFound":25}
+{"time":"2025-10-07T20:21:33.707107538+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":4}
+{"time":"2025-10-07T20:21:38.708674317+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/about/results-and-metrics/"}
+{"time":"2025-10-07T20:21:39.222495461+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/about/results-and-metrics/","execTime":513718864,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:39.222563202+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:39.224671303+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":2088030,"linksFound":14,"imagesFound":3}
+{"time":"2025-10-07T20:21:39.227225169+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":5}
+{"time":"2025-10-07T20:21:44.229070068+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/legal/"}
+{"time":"2025-10-07T20:21:44.809948586+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/legal/","execTime":580764347,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:44.810052348+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:44.813247604+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":3162917,"linksFound":17,"imagesFound":1}
+{"time":"2025-10-07T20:21:44.816820898+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":6}
+{"time":"2025-10-07T20:21:49.818031895+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/contact-us/"}
+{"time":"2025-10-07T20:21:50.407733043+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/contact-us/","execTime":589524503,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:50.407836189+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:50.410220092+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":2323996,"linksFound":14,"imagesFound":1}
+{"time":"2025-10-07T20:21:50.418503767+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":7}
+{"time":"2025-10-07T20:21:55.420378183+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/2025/space-agency-partners/"}
+{"time":"2025-10-07T20:21:55.961588039+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/2025/space-agency-partners/","execTime":541047688,"finalStatusCode":200}
+{"time":"2025-10-07T20:21:55.961708183+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:21:55.965356373+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":3605824,"linksFound":28,"imagesFound":15}
+{"time":"2025-10-07T20:21:55.971519538+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":8}
+{"time":"2025-10-07T20:22:00.973061306+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/meet-the-team/"}
+{"time":"2025-10-07T20:22:01.582369661+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/meet-the-team/","execTime":609144700,"finalStatusCode":200}
+{"time":"2025-10-07T20:22:01.582485756+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:22:01.584977615+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":2451155,"linksFound":13,"imagesFound":1}
+{"time":"2025-10-07T20:22:01.590850214+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":9}
+{"time":"2025-10-07T20:22:06.592054094+01:00","level":"INFO","msg":"Processing URL","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","url":"https://spaceappschallenge.org/host-an-event/"}
+{"time":"2025-10-07T20:22:07.130280779+01:00","level":"INFO","msg":"GET Request finished successfully","Context":"Netwok","url":"https://spaceappschallenge.org/host-an-event/","execTime":538064064,"finalStatusCode":200}
+{"time":"2025-10-07T20:22:07.130386627+01:00","level":"INFO","msg":"Starting HTML content parsing","Context":"Parsing"}
+{"time":"2025-10-07T20:22:07.134905264+01:00","level":"INFO","msg":"HTML parsing complete","Context":"Parsing","execTime":4489134,"linksFound":15,"imagesFound":6}
+{"time":"2025-10-07T20:22:07.138662238+01:00","level":"INFO","msg":"Page processed successfully","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","host":"spaceappschallenge.org","processedPages":10}
+{"time":"2025-10-07T20:22:07.138704106+01:00","level":"INFO","msg":"Max pages reached; stopping crawl for host","Context":"General","host":"spaceappschallenge.org","operation":"Crawl","maxPages":10}
+{"time":"2025-10-07T20:22:07.138719761+01:00","level":"INFO","msg":"Crawl process finished. Performing cleanup.","Context":"General","host":"spaceappschallenge.org","operation":"Crawl"}
