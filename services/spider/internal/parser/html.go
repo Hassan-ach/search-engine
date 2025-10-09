@@ -1,74 +1,19 @@
 package parser
 
 import (
-	"fmt"
 	"io"
 	"strings"
 	"time"
 
 	"golang.org/x/net/html"
 
+	"spider/internal/entity"
 	"spider/internal/utils"
 )
 
-type MetaData struct {
-	Url         string
-	Title       string
-	Description string
-	Type        string
-	SiteName    string
-	Local       string
-	Keywords    []string
-	Icons       []string
-	CrawledAt   time.Time
-}
-
-type Page struct {
-	MetaData
-	StatusCode int
-	HTML       []byte
-	// Text       string
-	Images *utils.Set[string]
-	Links  *utils.Set[string]
-}
-
-func (p *Page) String() {
-	fmt.Println("===== Page Info =====")
-	fmt.Printf("URL: %s\n", p.Url)
-	fmt.Printf("Status Code: %d\n", p.StatusCode)
-	fmt.Printf("Crawled At: %s\n", p.CrawledAt.Format(time.RFC3339))
-	fmt.Println()
-
-	fmt.Println("----- Meta Data -----")
-	fmt.Printf("Title: %s\n", p.Title)
-	fmt.Printf("Description: %s\n", p.Description)
-	fmt.Printf("Type: %s\n", p.Type)
-	fmt.Printf("Site Name: %s\n", p.SiteName)
-	fmt.Printf("Locale: %s\n", p.Local)
-	if len(p.Keywords) > 0 {
-		fmt.Printf("Keywords: %s\n", strings.Join(p.Keywords, ", "))
-	}
-	if len(p.Icons) > 0 {
-		fmt.Printf("Icons: %s\n", strings.Join(p.Icons, ", "))
-	}
-	fmt.Println()
-
-	fmt.Println("----- Links -----")
-	for _, l := range p.Links.GetAll() {
-		fmt.Printf("  - %s\n", l)
-	}
-
-	fmt.Println("----- Images -----")
-	for _, img := range p.Images.GetAll() {
-		fmt.Printf("  - %s\n", img)
-	}
-
-	fmt.Println("=====================")
-}
-
 // Html id function tacks an HTML document and will return a
 // pointer for Data struct content
-func Html(r io.Reader) (*Page, error) {
+func Html(r io.Reader) (*entity.Page, error) {
 	log := utils.Log.Parsing()
 	log.Info("Starting HTML content parsing")
 	start := time.Now()
@@ -97,14 +42,16 @@ func Html(r io.Reader) (*Page, error) {
 		"imagesFound", i.Len(),
 	)
 
-	return &Page{
+	return &entity.Page{
 		MetaData: metaData,
 		Links:    u,
 		Images:   i,
 	}, nil
 }
 
-func processNodes(node *html.Node) (urls []string, imgs []string, desc string, metaData MetaData) {
+func processNodes(
+	node *html.Node,
+) (urls []string, imgs []string, desc string, metaData entity.MetaData) {
 	if node == nil {
 		return
 	}
@@ -164,13 +111,13 @@ func processNodes(node *html.Node) (urls []string, imgs []string, desc string, m
 	return
 }
 
-func getMetaData(n *html.Node) MetaData {
+func getMetaData(n *html.Node) entity.MetaData {
 	prop := getMetaProperty(n)
 	content := getMetaContent(n)
 	if content == "" {
-		return MetaData{}
+		return entity.MetaData{}
 	}
-	var m MetaData
+	var m entity.MetaData
 	switch prop {
 	case "url":
 		m.Url = content
@@ -235,7 +182,7 @@ func getMetaContent(n *html.Node) string {
 	return ""
 }
 
-func mergeMetaData(base, other MetaData) MetaData {
+func mergeMetaData(base, other entity.MetaData) entity.MetaData {
 	if other.Url != "" {
 		base.Url = other.Url
 	}

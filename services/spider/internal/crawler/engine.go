@@ -1,31 +1,24 @@
 package crawler
 
 import (
-	"context"
-	"errors"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
+	"spider/internal/entity"
 	"spider/internal/parser"
 	"spider/internal/store"
 	"spider/internal/utils"
 )
 
 type Engine struct {
-	MaxWorkers  int
-	CacheClient *store.CacheClient
-	Workers     int
-	Ctx         context.Context
+	MaxWorkers int
+	Workers    int
 }
 
 func NewEngin() *Engine {
-	ctx := context.Background()
-	e := Engine{
-		CacheClient: store.Cache,
-		Ctx:         ctx,
-	}
+	e := Engine{}
 	utils.Log.General().Info("Crawler engine initialized")
 
 	return &e
@@ -50,12 +43,9 @@ func (e *Engine) NewCrawler() (crawler *Crawler, err error) {
 		finalLog.Info("Crawler creation completed successfully", "crawler", crawler.String())
 	}()
 
-	var ok bool
-
-	host, ok = store.NewHost()
-	if !ok {
-		err = errors.New("failed to retrieve new host from the store")
-		utils.Log.DB().Error(err.Error())
+	host, err = store.PopHost()
+	if err != nil {
+		utils.Log.DB().Error("failed to retrieve new host from the store", "error", err)
 		return nil, err
 	}
 	utils.Log.DB().Info("New host retrieved", "host", host)
@@ -86,7 +76,7 @@ func (e *Engine) NewCrawler() (crawler *Crawler, err error) {
 	}
 
 	crawler = &Crawler{
-		Host: Host{
+		Host: entity.Host{
 			MaxRetry:       5,
 			Delay:          delay,
 			MaxPages:       10,
@@ -96,8 +86,6 @@ func (e *Engine) NewCrawler() (crawler *Crawler, err error) {
 			DiscovedURLs:   discovedUrls,
 			VisitedURLs:    utils.NewSet[string](),
 		},
-		CacheClient: e.CacheClient,
-		Ctx:         e.Ctx,
 	}
 	log.Debug("Crawler object instantiated", "crawler", crawler.String())
 

@@ -3,36 +3,25 @@ package crawler
 // TODO:
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"net/url"
 	"strings"
 	"time"
 
+	"spider/internal/entity"
 	"spider/internal/parser"
 	"spider/internal/store"
 	"spider/internal/utils"
 )
 
 // Crawler is type that contain all the necessary informations about
-// how Crawler can crawl it Host
+// how Crawler can crawl it's Host
 type Crawler struct {
-	Host
-	CacheClient *store.CacheClient
-	Ctx         context.Context
+	entity.Host
+	Id int
 }
 
 // Host is type that contain all the roles for a specific host
-type Host struct {
-	MaxRetry       int
-	MaxPages       int
-	Delay          int
-	Name           string
-	AllowedUrls    []string
-	NotAllwedPaths []string
-	DiscovedURLs   *utils.SetQueu[string]
-	VisitedURLs    *utils.Set[string]
-}
 
 func (c *Crawler) String() string {
 	return fmt.Sprintf(
@@ -45,8 +34,7 @@ func (c *Crawler) String() string {
 			"  Disallowed Paths: %v\n"+
 			"  Discovered URLs: %d\n"+
 			"  Visited URLs: %d\n"+
-			"  Cache Connected: %v\n",
-		c.Name,
+			c.Name,
 		c.MaxRetry,
 		c.MaxPages,
 		c.Delay,
@@ -54,7 +42,6 @@ func (c *Crawler) String() string {
 		c.NotAllwedPaths,
 		c.DiscovedURLs.Len(),
 		c.VisitedURLs.Len(),
-		c.CacheClient != nil,
 	)
 }
 
@@ -189,7 +176,7 @@ func (c *Crawler) addUrls(s []string) {
 	)
 }
 
-func (c *Crawler) process(u string) (*parser.Page, error) {
+func (c *Crawler) process(u string) (*entity.Page, error) {
 	body, statusCode, err := utils.GetReq(u, c.MaxRetry, c.Delay)
 	if err != nil {
 		return nil, fmt.Errorf("GET request failed: %w", err)
@@ -207,6 +194,5 @@ func (c *Crawler) process(u string) (*parser.Page, error) {
 	page.StatusCode = statusCode
 	page.HTML = body
 
-	// store.PostHtml(u, body)
 	return page, nil
 }

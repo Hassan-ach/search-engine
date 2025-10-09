@@ -4,19 +4,11 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
 
 	"github.com/redis/go-redis/v9"
 )
 
 type CacheClient struct{ *redis.Client }
-
-var (
-	ctx   context.Context = context.Background()
-	Cache                 = NewCacheClient()
-)
-
-var mu sync.Mutex
 
 func NewCacheClient() *CacheClient {
 	client := redis.NewClient(&redis.Options{
