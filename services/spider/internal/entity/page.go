@@ -9,14 +9,14 @@ import (
 )
 
 type Page struct {
-	MetaData
-	StatusCode int
-	HTML       []byte
-	// Text       string
-	Images *utils.Set[string]
-	Links  *utils.Set[string]
+	MetaData          // embeds MetaData
+	StatusCode int    // HTTP response code
+	HTML       []byte // Raw HTML content
+	Images     *utils.Set[string]
+	Links      *utils.Set[string]
 }
 
+// String prints a detailed, human-readable summary of the Page content.
 func (p *Page) String() {
 	fmt.Println("===== Page Info =====")
 	fmt.Printf("URL: %s\n", p.Url)
@@ -39,13 +39,21 @@ func (p *Page) String() {
 	fmt.Println()
 
 	fmt.Println("----- Links -----")
-	for _, l := range p.Links.GetAll() {
-		fmt.Printf("  - %s\n", l)
+	if p.Links != nil {
+		for _, l := range p.Links.GetAll() {
+			fmt.Printf("  - %s\n", l)
+		}
+	} else {
+		fmt.Println("  No links")
 	}
 
 	fmt.Println("----- Images -----")
-	for _, img := range p.Images.GetAll() {
-		fmt.Printf("  - %s\n", img)
+	if p.Images != nil {
+		for _, img := range p.Images.GetAll() {
+			fmt.Printf("  - %s\n", img)
+		}
+	} else {
+		fmt.Println("  No images")
 	}
 
 	fmt.Println("=====================")

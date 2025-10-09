@@ -11,8 +11,9 @@ import (
 	"spider/internal/utils"
 )
 
-// Html id function tacks an HTML document and will return a
-// pointer for Data struct content
+// Html parses an HTML document from the given reader and returns a populated Page struct.
+// It extracts metadata, links, images, and generates a short text description.
+// Logs parsing start, completion, and execution time.
 func Html(r io.Reader) (*entity.Page, error) {
 	log := utils.Log.Parsing()
 	log.Info("Starting HTML content parsing")
@@ -49,15 +50,23 @@ func Html(r io.Reader) (*entity.Page, error) {
 	}, nil
 }
 
+// processNodes recursively traverses an HTML node tree and extracts:
+// - href URLs
+// - image sources
+// - a short text description
+// - metadata from <meta> and <link> tags
 func processNodes(
 	node *html.Node,
 ) (urls []string, imgs []string, desc string, metaData entity.MetaData) {
 	if node == nil {
 		return
 	}
+
+	// Skip script and style nodes
 	if node.Type == html.ElementNode && (node.Data == "script" || node.Data == "style") {
 		return
 	}
+
 	if node.Type == html.ElementNode {
 		switch node.Data {
 		case "meta":
@@ -88,6 +97,7 @@ func processNodes(
 		}
 	}
 
+	// Aggregate text content for description
 	if node.Type == html.TextNode {
 		text := strings.ToLower(strings.TrimSpace(node.Data))
 		if text != "" {
@@ -95,6 +105,7 @@ func processNodes(
 		}
 	}
 
+	// Recursively process child nodes
 	for n := node.FirstChild; n != nil; n = n.NextSibling {
 		u, i, d, m := processNodes(n)
 		metaData = mergeMetaData(metaData, m)
@@ -104,6 +115,8 @@ func processNodes(
 			desc += strings.TrimSpace(d)
 		}
 	}
+
+	// Limit description length
 	if len(desc) > 200 {
 		desc = desc[:200]
 	}

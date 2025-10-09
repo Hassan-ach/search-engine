@@ -1,6 +1,5 @@
 package crawler
 
-// TODO:
 import (
 	"bytes"
 	"fmt"
@@ -14,185 +13,135 @@ import (
 	"spider/internal/utils"
 )
 
-// Crawler is type that contain all the necessary informations about
-// how Crawler can crawl it's Host
-type Crawler struct {
-	entity.Host
-	Id int
+// Run continuously executes the crawl process in an infinite loop.
+// Each iteration fetches a URL, processes the page, updates the store,
+// and logs success or failure.
+func Run() {
+	// store.AddUrls(starters)
+	for count := 1; ; count++ {
+		utils.Log.General().Debug("Starting crawl iteration", "iteration", count)
+		crawl()
+		// Small delay to avoid busy-loop
+		// time.Sleep(100 * time.Millisecond)
+	}
 }
 
-// Host is type that contain all the roles for a specific host
+// crawl fetches a URL from the store, retrieves host metadata (from Redis or parser),
+// processes the page, normalizes links (removing disallowed paths), updates
+// Redis sets and counters, persists the page, and logs success or errors.
+func crawl() {
+	start := time.Now()
+	log := utils.Log.General().With("operation", "Crawl")
+	log.Info("Starting crawl process...")
 
-func (c *Crawler) String() string {
-	return fmt.Sprintf(
-		"Crawler Info\n"+
-			"  Host: %s\n"+
-			"  MaxRetry: %d\n"+
-			"  MaxPages: %d\n"+
-			"  Delay: %ds\n"+
-			"  Allowed URLs: %v\n"+
-			"  Disallowed Paths: %v\n"+
-			"  Discovered URLs: %d\n"+
-			"  Visited URLs: %d\n"+
-			c.Name,
-		c.MaxRetry,
-		c.MaxPages,
-		c.Delay,
-		c.AllowedUrls,
-		c.NotAllwedPaths,
-		c.DiscovedURLs.Len(),
-		c.VisitedURLs.Len(),
+	var (
+		err    error
+		ok     bool
+		rawUrl string
 	)
-}
 
-// Crawl is entry point for the crawl can start working
-func (c *Crawler) Crawl() {
-	log := utils.Log.General().With("host", c.Host.Name, "operation", "Crawl")
-	log.Info("Starting crawl process for host")
-
+	// Start and deferred logging
 	defer func() {
-		log.Info("Crawl process finished. Performing cleanup.")
-		err := store.Completed(c.Host.Name)
+		execTime := time.Since(start)
+		// Logs failed crawl if err is set
 		if err != nil {
-			log.Error("Cleanup Failed", "host", c.Host.Name, "error", err)
+			log.Warn("Failed to crawl", "error", err, "url", rawUrl)
+			return
 		}
+		// Logs crawl process completion and duration
+		log.Info("Crawl process finished.", "execTime", execTime, "url", rawUrl)
 	}()
 
-	pages := 0
-	for !c.DiscovedURLs.Empty() {
-		u, ok := c.getUrl()
-		if !ok {
-			continue
-		}
-
-		log.Info("Processing URL", "url", u)
-		data, err := c.process(u)
-		if err != nil {
-			log.Warn("Failed to process URL", "url", u, "error", err)
-			continue
-		}
-
-		c.VisitedURLs.Add(u)
-		pages++
-		c.addUrls(data.Links.GetAll())
-		log.Info("Page processed successfully", "host", c.Host.Name, "processedPages", pages)
-
-		if c.MaxPages > 0 && pages >= c.MaxPages {
-			log.Info("Max pages reached; stopping crawl for host", "maxPages", c.MaxPages)
-			break
-		}
-		time.Sleep(time.Duration(c.Delay) * time.Second)
-	}
-	if c.DiscovedURLs.Empty() {
-		log.Info("Discovered URLs queue is empty; crawl concluded.")
-	}
-}
-
-func (c *Crawler) getUrl() (string, bool) {
-	log := utils.Log.General().With("host", c.Host.Name, "operation", "getUrl")
-
-	s, ok := c.DiscovedURLs.Pop()
+	// Fetches next URL from Redis and handles empty set or errors.
+	rawUrl, ok, _ = store.GetUrl()
 	if !ok {
-		log.Debug("Discovered URLs queue is empty.")
-		return "", false
-	}
-	if c.VisitedURLs.Contains(s) {
-		log.Debug("URL already visited, skipping.", "url", s)
-		return "", false
+		err = fmt.Errorf("Failed to Get Url from store")
+		// switch log to Cache context
+		log = utils.Log.Cache().With("operation", "Crawl")
+		return
 	}
 
-	u, err := url.Parse(s)
+	u, err := url.Parse(rawUrl)
 	if err != nil {
-		log.Warn("Failed to parse URL, skipping.", "url", s, "error", err)
-		return "", false
+		// URL is invalid, skip crawl
+		return
 	}
 
-	for _, notAllowed := range c.NotAllwedPaths {
-		if strings.HasPrefix(u.Path, notAllowed) {
-			log.Debug(
-				"URL path is disallowed, skipping.",
-				"url",
-				s,
-				"path",
-				u.Path,
-				"rule",
-				notAllowed,
-			)
-			return "", false
-		}
-	}
-
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
-
-	return u.String(), true
-}
-
-func (c *Crawler) addUrls(s []string) {
-	log := utils.Log.General().With("host", c.Host.Name, "operation", "addUrls")
-	addedToQueue := 0
-	addedToDiscovery := 0
-
-	for _, u := range s {
-		l, err := url.Parse(u)
+	var host *entity.Host
+	host, ok = store.GetHostMetaData(strings.TrimPrefix(u.Host, "www."))
+	if !ok {
+		// Host metadata missing; generate using parser
+		host, err = parser.NewHostMetaDta(u.String())
 		if err != nil {
-			log.Warn("Could not parse discovered URL", "url", u, "error", err)
-			continue
-		}
-		if l.Host == "" {
-			l.Host = c.Host.Name
-		}
-		if l.Scheme == "" {
-			l.Scheme = "https"
-		}
-		finalURL := l.String()
-
-		if c.VisitedURLs.Contains(finalURL) {
-			continue
-		}
-		if l.Host == c.Host.Name {
-			c.DiscovedURLs.Push(l.String())
-			addedToQueue++
-
-		} else {
-			if err := store.AddLink(l.Host, finalURL); err != nil {
-				utils.Log.Cache().Debug("Failed to add URL", "url", finalURL, "host", l.Host, "error", err)
-				continue
-			}
-			if err := store.AddHost(l.Host); err != nil {
-				utils.Log.Cache().Debug("Failed to add host", "host", l.Host, "error", err)
-				continue
-			}
-			addedToDiscovery++
+			// switch log to parsing context
+			log = utils.Log.Parsing().With("operation", "Crawl")
+			return
 		}
 	}
-	log.Debug(
-		"URL addition complete",
-		"addedToCurrentQueue",
-		addedToQueue,
-		"addedToGlobalDiscovery",
-		addedToDiscovery,
-	)
+
+	page, err := process(rawUrl, host.MaxRetry, host.Delay)
+	if err != nil {
+		// Page failed to download or parse
+		return
+	}
+
+	normUrls := utils.NewSet[string]()
+	for _, x := range page.Links.GetAll() {
+		ur, err := url.Parse(x)
+		if err != nil {
+			// Skip invalid URL
+			continue
+		}
+
+		skip := false
+		for _, disallowed := range host.NotAllwedPaths {
+			if strings.HasPrefix(ur.Path, disallowed) {
+				skip = true
+				break
+			}
+		}
+		if skip {
+			// Skip disallowed paths
+			continue
+		}
+
+		normUrls.Add(ur.String())
+	}
+
+	normUrls.Print()
+	page.Links = normUrls
+
+	host.PagesCrawled++
+	store.AddToVisitedUrl(rawUrl)
+	store.AddToWaitedHost(host.Name, host.Delay)
+	go store.Page(*page)
+	store.AddUrls(page.Links.GetAll())
+	log.Info("Page crawled successfully", "host", host.Name)
 }
 
-func (c *Crawler) process(u string) (*entity.Page, error) {
-	body, statusCode, err := utils.GetReq(u, c.MaxRetry, c.Delay)
+// process performs an HTTP GET request to the given URL, applies retry and delay logic,
+// parses the HTML content into a Page struct, and returns the fully populated Page.
+// Returns an error if the request fails or parsing fails.
+func process(u string, maxRetry, delay int) (*entity.Page, error) {
+	body, statusCode, err := utils.GetReq(u, maxRetry, delay)
 	if err != nil {
+		// Failed to fetch page after retries
+		// Suggest logging the URL and retry parameters
 		return nil, fmt.Errorf("GET request failed: %w", err)
 	}
 
 	page, err := parser.Html(bytes.NewReader(body))
 	if err != nil {
-		utils.Log.Parsing().Error("Failed to parse HTML content", "url", u, "error", err)
+		// Failed to parse HTML
 		return nil, fmt.Errorf("HTML parsing failed: %w", err)
 	}
 
 	if page.Url == "" {
+		// Ensure Page.Url is always set
 		page.Url = u
 	}
-	page.StatusCode = statusCode
-	page.HTML = body
+	page.StatusCode = statusCode // Store HTTP status code
+	page.HTML = body             // Store raw HTML
 
 	return page, nil
 }

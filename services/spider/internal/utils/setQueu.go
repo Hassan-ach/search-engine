@@ -57,3 +57,13 @@ func (s SetQueu[T]) Print() {
 		fmt.Printf("%d: %v\n", i+1, s)
 	}
 }
+
+func (s *SetQueu[T]) GetAll() []T {
+	t := make([]T, len(s.elements))
+	i := 0
+	for _, v := range s.elements {
+		t[i] = v
+		i++
+	}
+	return t
+}
