@@ -6,15 +6,15 @@ import (
 )
 
 type MetaData struct {
-	Url         string
-	Title       string
-	Description string
-	Type        string
-	SiteName    string
-	Local       string
-	Keywords    []string
-	Icons       []string
-	CrawledAt   time.Time
+	URL         string    `json:"url"`
+	Title       string    `json:"title,omitempty"`
+	Description string    `json:"description,omitempty"`
+	Type        string    `json:"type,omitempty"`
+	SiteName    string    `json:"siteName,omitempty"`
+	Locale      string    `json:"locale,omitempty"`
+	Keywords    []string  `json:"keywords,omitempty"`
+	Icons       []string  `json:"icons,omitempty"`
+	CrawledAt   time.Time `json:"crawledAt"`
 }
 
 // String returns a human-readable summary of metadata.
@@ -30,12 +30,12 @@ func (m *MetaData) String() string {
 			"  Keywords: %v\n"+
 			"  Icons: %v\n"+
 			"  CrawledAt: %s\n",
-		m.Url,
+		m.URL,
 		m.Title,
 		m.Description,
 		m.Type,
 		m.SiteName,
-		m.Local,
+		m.Locale,
 		m.Keywords,
 		m.Icons,
 		m.CrawledAt.Format(time.RFC3339),

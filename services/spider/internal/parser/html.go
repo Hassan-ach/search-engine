@@ -133,7 +133,7 @@ func getMetaData(n *html.Node) entity.MetaData {
 	var m entity.MetaData
 	switch prop {
 	case "url":
-		m.Url = content
+		m.URL = content
 	case "title":
 		m.Title = content
 	case "description":
@@ -143,7 +143,7 @@ func getMetaData(n *html.Node) entity.MetaData {
 	case "site_name":
 		m.SiteName = content
 	case "locale":
-		m.Local = content
+		m.Locale = content
 	case "keywords":
 		m.Keywords = strings.Split(content, ",")
 		for i := range m.Keywords {
@@ -196,8 +196,8 @@ func getMetaContent(n *html.Node) string {
 }
 
 func mergeMetaData(base, other entity.MetaData) entity.MetaData {
-	if other.Url != "" {
-		base.Url = other.Url
+	if other.URL != "" {
+		base.URL = other.URL
 	}
 	if other.Title != "" {
 		base.Title = other.Title
@@ -211,8 +211,8 @@ func mergeMetaData(base, other entity.MetaData) entity.MetaData {
 	if other.SiteName != "" {
 		base.SiteName = other.SiteName
 	}
-	if other.Local != "" {
-		base.Local = other.Local
+	if other.Locale != "" {
+		base.Locale = other.Locale
 	}
 	base.Keywords = append(base.Keywords, other.Keywords...)
 	base.Icons = append(base.Icons, other.Icons...)

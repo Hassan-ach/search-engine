@@ -21,7 +21,7 @@ type sitemapXml struct {
 // sitMap parses a sitemap XML file and extracts all URLs listed in <loc> tags.
 // Returns a slice of normalized URL strings and any parsing error encountered.
 // Logs start, end, number of URLs found, and errors.
-func sitMap(file []byte) ([]string, error) {
+func siteMap(file []byte) ([]string, error) {
 	log := utils.Log.Parsing().With("operation", "SitMap")
 	log.Info("Starting sitemap.xml parsing")
 

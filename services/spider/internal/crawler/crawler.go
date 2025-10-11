@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"spider/internal/entity"
@@ -13,17 +14,33 @@ import (
 	"spider/internal/utils"
 )
 
+var (
+	WG            sync.WaitGroup
+	maxGoroutines               = 10
+	CH            chan struct{} = make(chan struct{}, maxGoroutines)
+)
+
 // Run continuously executes the crawl process in an infinite loop.
 // Each iteration fetches a URL, processes the page, updates the store,
 // and logs success or failure.
-func Run() {
-	// store.AddUrls(starters)
-	for count := 1; ; count++ {
-		utils.Log.General().Debug("Starting crawl iteration", "iteration", count)
-		crawl()
-		// Small delay to avoid busy-loop
-		// time.Sleep(100 * time.Millisecond)
+func Run(starters []string) {
+	store.AddUrls(starters)
+
+	for {
+		WG.Add(1)
+		CH <- struct{}{}
+		go func() {
+			defer WG.Done()
+			defer func() { <-CH }()
+			crawl()
+		}()
 	}
+	// for count := 1; ; count++ {
+	// 	utils.Log.General().Debug("Starting crawl iteration", "iteration", count)
+	// 	crawl()
+	// 	// Small delay to avoid busy-loop
+	// 	// time.Sleep(100 * time.Millisecond)
+	// }
 }
 
 // crawl fetches a URL from the store, retrieves host metadata (from Redis or parser),
@@ -114,7 +131,11 @@ func crawl() {
 	host.PagesCrawled++
 	store.AddToVisitedUrl(rawUrl)
 	store.AddToWaitedHost(host.Name, host.Delay)
-	go store.Page(*page)
+	store.WG.Add(1)
+	go func() {
+		defer store.WG.Done()
+		store.Page(*page)
+	}()
 	store.AddUrls(page.Links.GetAll())
 	log.Info("Page crawled successfully", "host", host.Name)
 }
@@ -136,9 +157,9 @@ func process(u string, maxRetry, delay int) (*entity.Page, error) {
 		return nil, fmt.Errorf("HTML parsing failed: %w", err)
 	}
 
-	if page.Url == "" {
+	if page.URL == "" {
 		// Ensure Page.Url is always set
-		page.Url = u
+		page.URL = u
 	}
 	page.StatusCode = statusCode // Store HTTP status code
 	page.HTML = body             // Store raw HTML

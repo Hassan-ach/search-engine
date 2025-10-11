@@ -19,7 +19,7 @@ type Page struct {
 // String prints a detailed, human-readable summary of the Page content.
 func (p *Page) String() {
 	fmt.Println("===== Page Info =====")
-	fmt.Printf("URL: %s\n", p.Url)
+	fmt.Printf("URL: %s\n", p.URL)
 	fmt.Printf("Status Code: %d\n", p.StatusCode)
 	fmt.Printf("Crawled At: %s\n", p.CrawledAt.Format(time.RFC3339))
 	fmt.Println()
@@ -29,7 +29,7 @@ func (p *Page) String() {
 	fmt.Printf("Description: %s\n", p.Description)
 	fmt.Printf("Type: %s\n", p.Type)
 	fmt.Printf("Site Name: %s\n", p.SiteName)
-	fmt.Printf("Locale: %s\n", p.Local)
+	fmt.Printf("Locale: %s\n", p.Locale)
 	if len(p.Keywords) > 0 {
 		fmt.Printf("Keywords: %s\n", strings.Join(p.Keywords, ", "))
 	}

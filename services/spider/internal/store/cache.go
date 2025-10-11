@@ -26,7 +26,7 @@ func NewCacheClient() *redis.Client {
 	// Ping to ensure Redis connection is alive
 	_, err := client.Ping(context.Background()).Result()
 	if err != nil {
-		log.Fatalf("Failed to connected to redis %v", err)
+		log.Fatalf("Failed to connected to redis ERROR: %v", err)
 	}
 	// Required for gob encoding/decoding of Host structs
 	gob.Register(entity.Host{})
@@ -132,7 +132,7 @@ return url
 
 		// skipped URL due to visited host or visited URL
 		utils.Log.Cache().Debug("Skipped URL from Lua script, retrying")
-		// time.Sleep(10 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
 

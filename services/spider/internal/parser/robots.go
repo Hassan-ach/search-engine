@@ -88,7 +88,7 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 // Returns lists of allowed URLs, disallowed paths, crawl delay, and sitemap URLs.
 // Logs start, end, and details about each rule parsed.
 func parseRobots(file, userAgent string) (allow, disallow []string, delay int, sitemaps []string) {
-	log := utils.Log.Parsing().With("operation", "Robots")
+	log := utils.Log.Parsing().With("operation", "parseRobots")
 	start := time.Now()
 	log.Info("Starting robots.txt parsing")
 
@@ -188,17 +188,30 @@ func sitemapsProcess(s []string, host string) []string {
 	}()
 
 	for _, sitemapURL := range s {
-		file, _, err := utils.GetReq(sitemapURL, 1, 5)
+		siteUrl, err := url.Parse(sitemapURL)
+		if err != nil {
+			utils.Log.Parsing().Warn("Failed to parse url", "url", sitemapURL, "error", err)
+		}
+		if siteUrl.Scheme == "" {
+			siteUrl.Scheme = "https"
+		}
+		if siteUrl.Host == "" {
+			siteUrl.Host = host
+		}
+
+		file, _, err := utils.GetReq(siteUrl.String(), 1, 5)
 		if err != nil {
 			failedSites++
-			utils.Log.Network().Warn("Failed to fetch sitemap", "url", sitemapURL, "error", err)
+			utils.Log.Network().
+				Warn("Failed to fetch sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
 			continue
 		}
 
-		d, err := sitMap(file)
+		d, err := siteMap(file)
 		if err != nil {
 			failedSites++
-			utils.Log.Parsing().Warn("Failed to parse sitemap", "url", sitemapURL, "error", err)
+			utils.Log.Parsing().
+				Warn("Failed to parse sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
 			continue
 		}
 
