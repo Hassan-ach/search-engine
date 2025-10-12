@@ -99,13 +99,13 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 // NormalizeUrl canonicalizes a URL: normalizes scheme/host/query/path, filters disallowed paths/queries/extensions.
 // Returns (normalized string, true) if valid for crawling; ("", false) if skipped or invalid.
 func NormalizeUrl(raw, baseHost string) (string, bool) {
-	disallowPaths := []string{ // Consider making []string param for config
+	disallowPaths := []string{
 		"/login", "/logout", "/register", "/signup", "/password-reset",
 		"/account/", "/cart", "/checkout", "/order/", "/payment/",
 		"/search", "/filter/", "/admin/", "/dashboard/", "/settings/",
 		"/404", "/error/", "/maintenance", "/test/", "/print/", "/preview/", "/tag/",
 	}
-	disallowQueries := []string{ // Param names only
+	disallowQueries := []string{
 		"sort", "page", "filter", "q", "search",
 	}
 	skipExtensions := []string{
@@ -116,7 +116,7 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 		".mp4", ".avi", ".mov", ".wmv", ".mkv", ".flv", ".webm",
 		".css", ".js", ".ico",
 	}
-	if raw == "" {
+	if raw == "" || strings.HasPrefix(raw, "#") {
 		return "", false
 	}
 	u, err := url.Parse(raw)
@@ -164,7 +164,7 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 		sort.Strings(keys)
 		sorted := url.Values{}
 		for _, k := range keys {
-			sorted[k] = q[k] // Preserves multi-values
+			sorted[k] = q[k]
 		}
 		u.RawQuery = sorted.Encode()
 	}
