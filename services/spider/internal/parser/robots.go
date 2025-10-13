@@ -20,7 +20,7 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 	start := time.Now()
 	log := utils.Log.General()
 	log = log.With("operation", "NewHostMetaDta")
-	log.Info("Attempting to create new Host Meta Data Object")
+	fmt.Println("Attempting to create new Host Meta Data Object")
 
 	u, err := url.Parse(raw)
 	if err != nil {
@@ -37,7 +37,7 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 		}
 		finalLog.Info("Host Meta Data retrieve completed successfully")
 		finalLog.Debug(
-			"Host Meta Data retrieve completed successfully",
+			"",
 			"Host Meta Data",
 			host.String(),
 		)
@@ -90,7 +90,7 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 func parseRobots(file, userAgent string) (allow, disallow []string, delay int, sitemaps []string) {
 	log := utils.Log.Parsing().With("operation", "parseRobots")
 	start := time.Now()
-	log.Info("Starting robots.txt parsing")
+	fmt.Println("Starting robots.txt parsing")
 
 	defer func() {
 		log.Info(
@@ -146,10 +146,7 @@ func parseRobots(file, userAgent string) (allow, disallow []string, delay int, s
 			if d, err := strconv.Atoi(delayStr); err == nil {
 				delay = d
 				log.Debug("Found Crawl-delay", "delay", d)
-			} else {
-				log.Warn("Failed to parse Crawl-delay value", "value", delayStr, "error", err)
 			}
-
 		case strings.HasPrefix(lower, "sitemap:"):
 			sitemapURL := strings.TrimSpace(line[len("Sitemap:"):])
 			sitemaps = append(sitemaps, sitemapURL)
@@ -172,7 +169,7 @@ func parseRobots(file, userAgent string) (allow, disallow []string, delay int, s
 func sitemapsProcess(s []string, host string) []string {
 	start := time.Now()
 	log := utils.Log.General().With("operation", "sitemapsProcess", "host", host)
-	log.Info("Starting sitemap processing")
+	fmt.Println("Starting sitemap processing")
 
 	var r []string
 	failedSites := 0
@@ -203,7 +200,7 @@ func sitemapsProcess(s []string, host string) []string {
 		if err != nil {
 			failedSites++
 			utils.Log.Network().
-				Warn("Failed to fetch sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
+				Debug("Failed to fetch sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
 			continue
 		}
 
@@ -211,7 +208,7 @@ func sitemapsProcess(s []string, host string) []string {
 		if err != nil {
 			failedSites++
 			utils.Log.Parsing().
-				Warn("Failed to parse sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
+				Debug("Failed to parse sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
 			continue
 		}
 

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"net/url"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -18,6 +19,7 @@ var (
 	WG            sync.WaitGroup
 	maxGoroutines               = 10
 	CH            chan struct{} = make(chan struct{}, maxGoroutines)
+	Working       bool          = true
 )
 
 // Run continuously executes the crawl process in an infinite loop.
@@ -26,7 +28,7 @@ var (
 func Run(starters []string) {
 	store.AddUrls(starters)
 
-	for {
+	for Working {
 		WG.Add(1)
 		CH <- struct{}{}
 		go func() {
@@ -35,12 +37,6 @@ func Run(starters []string) {
 			crawl()
 		}()
 	}
-	// for count := 1; ; count++ {
-	// 	utils.Log.General().Debug("Starting crawl iteration", "iteration", count)
-	// 	crawl()
-	// 	// Small delay to avoid busy-loop
-	// 	// time.Sleep(100 * time.Millisecond)
-	// }
 }
 
 // crawl fetches a URL from the store, retrieves host metadata (from Redis or parser),
@@ -49,7 +45,6 @@ func Run(starters []string) {
 func crawl() {
 	start := time.Now()
 	log := utils.Log.General().With("operation", "Crawl")
-	log.Info("Starting crawl process...")
 
 	var (
 		err    error
@@ -72,7 +67,7 @@ func crawl() {
 	// Fetches next URL from Redis and handles empty set or errors.
 	rawUrl, ok, _ = store.GetUrl()
 	if !ok {
-		err = fmt.Errorf("Failed to Get Url from store")
+		// err = fmt.Errorf("Failed to Get Url from store")
 		// switch log to Cache context
 		log = utils.Log.Cache().With("operation", "Crawl")
 		return
@@ -85,15 +80,11 @@ func crawl() {
 	}
 
 	var host *entity.Host
-	host, ok = store.GetHostMetaData(strings.TrimPrefix(u.Host, "www."))
-	if !ok {
-		// Host metadata missing; generate using parser
-		host, err = parser.NewHostMetaDta(u.String())
-		if err != nil {
-			// switch log to parsing context
-			log = utils.Log.Parsing().With("operation", "Crawl")
-			return
-		}
+	host, err = getOrBuildHostMeta(u.Host)
+	if err != nil {
+		// switch log to parsing context
+		log = utils.Log.Parsing().With("operation", "Crawl")
+		return
 	}
 
 	page, err := process(rawUrl, host.MaxRetry, host.Delay)
@@ -102,30 +93,7 @@ func crawl() {
 		return
 	}
 
-	normUrls := utils.NewSet[string]()
-	for _, x := range page.Links.GetAll() {
-		ur, err := url.Parse(x)
-		if err != nil {
-			// Skip invalid URL
-			continue
-		}
-
-		skip := false
-		for _, disallowed := range host.NotAllwedPaths {
-			if strings.HasPrefix(ur.Path, disallowed) {
-				skip = true
-				break
-			}
-		}
-		if skip {
-			// Skip disallowed paths
-			continue
-		}
-
-		normUrls.Add(ur.String())
-	}
-
-	normUrls.Print()
+	normUrls := normalizeLinks(page.Links.GetAll(), host.NotAllwedPaths)
 	page.Links = normUrls
 
 	host.PagesCrawled++
@@ -140,10 +108,55 @@ func crawl() {
 	log.Info("Page crawled successfully", "host", host.Name)
 }
 
+func getOrBuildHostMeta(h string) (host *entity.Host, err error) {
+	host, ok := store.GetHostMetaData(strings.TrimPrefix(h, "www."))
+	if !ok {
+		// Host metadata missing; generate using parser
+		host, err = parser.NewHostMetaDta(h)
+		if err != nil {
+			return
+		}
+	}
+	return host, nil
+}
+
+func normalizeLinks(links []string, disallowed []string) *utils.Set[string] {
+	normUrls := utils.NewSet[string]()
+	for _, x := range links {
+		ur, err := url.Parse(x)
+		if err != nil || isDisallowed(ur.Path, disallowed) {
+			continue
+		}
+		normUrls.Add(ur.String())
+	}
+	return normUrls
+}
+
+func isDisallowed(path string, disallowed []string) bool {
+	for _, d := range disallowed {
+		// detect if pattern looks like regex
+		if strings.ContainsAny(d, `.^$*+?[]|()`) {
+			matched, err := regexp.MatchString(d, path)
+			if err != nil {
+				continue
+			}
+			if matched {
+				return true
+			}
+		} else {
+			if strings.HasPrefix(path, d) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // process performs an HTTP GET request to the given URL, applies retry and delay logic,
 // parses the HTML content into a Page struct, and returns the fully populated Page.
 // Returns an error if the request fails or parsing fails.
 func process(u string, maxRetry, delay int) (*entity.Page, error) {
+	utils.Log.General().Info("Start crawling", "url", u)
 	body, statusCode, err := utils.GetReq(u, maxRetry, delay)
 	if err != nil {
 		// Failed to fetch page after retries

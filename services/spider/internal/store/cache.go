@@ -21,6 +21,7 @@ func NewCacheClient() *redis.Client {
 		Password: "", // No password set
 		DB:       0,  // Use default DB
 		Protocol: 2,  // Connection protocol
+
 	})
 
 	// Ping to ensure Redis connection is alive
@@ -91,7 +92,7 @@ func GetUrl() (u string, ok bool, err error) {
 -- KEYS[1] = urls set
 -- KEYS[2] = visitedUrls set
 
-local url = redis.call("spop", KEYS[1])
+local url = redis.call("zpopmax", KEYS[1])
 if not url then
     return nil
 end
@@ -120,7 +121,7 @@ return url
 		// 	return "", false, nil
 		// }
 		if err != nil {
-			utils.Log.Cache().Warn("Redis Lua Failed", "error", err)
+			utils.Log.Cache().Debug("Redis Lua Failed", "error", err)
 			// time.Sleep(50 * time.Millisecond) // avoid busy spin
 			continue
 		}
@@ -140,27 +141,31 @@ return url
 // Logs warnings for empty input and errors for failed Redis operations.
 func AddUrls(urls []string) {
 	if len(urls) == 0 {
-		utils.Log.Cache().Warn("no URLs provided to AddUrls")
+		utils.Log.Cache().Debug("no URLs provided to AddUrls")
 		return
 	}
-	err := Cache.SAdd(ctx, "urls", urls).Err()
-	if err != nil {
-		utils.Log.Cache().Error("failed to add URLs", "error", err)
-		return
+	count := 0
+	for _, url := range urls {
+		err := Cache.ZIncrBy(ctx, "urls", 1, url).Err()
+		if err != nil {
+			utils.Log.Cache().Warn("failed to add URLs", "error", err)
+			continue
+		}
+		count++
 	}
-	utils.Log.Cache().Info("URLs added successfully", "count", len(urls))
+	utils.Log.Cache().Info("URLs added successfully", "count", count)
 }
 
 // AddToVisitedUrl adds a URL to the visitedUrls set.
 // Logs warnings for empty input and errors if Redis fails.
 func AddToVisitedUrl(u string) {
 	if u == "" {
-		utils.Log.Cache().Warn("empty URL passed to AddToVisitedUrl")
+		utils.Log.Cache().Debug("empty URL passed to AddToVisitedUrl")
 		return
 	}
 	err := Cache.SAdd(ctx, "visitedUrls", u).Err()
 	if err != nil {
-		utils.Log.Cache().Error("failed to add visited URL", "url", u, "error", err)
+		utils.Log.Cache().Warn("failed to add visited URL", "url", u, "error", err)
 		return
 	}
 	utils.Log.Cache().Info("added visited URL", "url", u)
@@ -170,13 +175,13 @@ func AddToVisitedUrl(u string) {
 // Logs warnings for empty input and errors for Redis failures.
 func AddToWaitedHost(h string, delay int) {
 	if h == "" {
-		utils.Log.Cache().Warn("empty host passed to AddToWaitedHost")
+		utils.Log.Cache().Debug("empty host passed to AddToWaitedHost")
 		return
 	}
 
 	err := Cache.Set(ctx, h, 1, time.Duration(delay)*time.Second).Err()
 	if err != nil {
-		utils.Log.Cache().Error("failed to add waited host", "host", h, "error", err)
+		utils.Log.Cache().Warn("failed to add waited host", "host", h, "error", err)
 		return
 	}
 	utils.Log.Cache().Info("added waited host", "host", h)

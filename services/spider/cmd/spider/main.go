@@ -21,9 +21,11 @@ func main() {
 
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
 
-	utils.Log.General().Info("Starting...")
+	fmt.Println("Starting...")
 	go crawler.Run([]string{})
 	<-sigs
 	fmt.Println("Exiting gracefully")
+	crawler.Working = false
+	crawler.WG.Wait()
 	store.WG.Wait()
 }

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"encoding/xml"
+	"fmt"
 
 	"spider/internal/utils"
 )
@@ -23,13 +24,13 @@ type sitemapXml struct {
 // Logs start, end, number of URLs found, and errors.
 func siteMap(file []byte) ([]string, error) {
 	log := utils.Log.Parsing().With("operation", "SitMap")
-	log.Info("Starting sitemap.xml parsing")
+	fmt.Println("Starting sitemap.xml parsing")
 
 	var sitemap sitemapXml
 	// Unmarshal XML into sitemapXml struct
 	err := xml.Unmarshal(file, &sitemap)
 	if err != nil {
-		log.Error("Failed to unmarshal sitemap XML", "error", err)
+		log.Debug("Failed to unmarshal sitemap XML", "error", err)
 		return nil, err
 	}
 

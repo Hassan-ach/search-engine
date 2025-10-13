@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"io"
 	"strings"
 	"time"
@@ -16,12 +17,12 @@ import (
 // Logs parsing start, completion, and execution time.
 func Html(r io.Reader) (*entity.Page, error) {
 	log := utils.Log.Parsing()
-	log.Info("Starting HTML content parsing")
+	fmt.Println("Starting HTML content parsing")
 	start := time.Now()
 
 	doc, err := html.Parse(r)
 	if err != nil {
-		log.Error("Failed to parse HTML content", "error", err)
+		log.Warn("Failed to parse HTML content", "error", err)
 		return nil, err
 	}
 

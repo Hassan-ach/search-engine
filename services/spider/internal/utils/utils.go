@@ -12,30 +12,20 @@ import (
 
 func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err error) {
 	start := time.Now()
+	log := Log.Network().With("url", url, "operation", "GetReq")
 
 	defer func() {
-		log := Log.Network().With(
-			"url", url,
-			"execTime", time.Since(start),
-		)
+		log = log.With("execTime", time.Since(start))
 		if err != nil {
-			log.Error(
-				"GET Request finished with error",
-				"error",
-				err,
-				"finalStatusCode",
-				statusCode,
-			)
+			log.Error("GET Request failed", "error", err)
 		} else {
-			log.Info("GET Request finished successfully", "finalStatusCode", statusCode)
+			log.Info("GET Request succeeded")
 		}
 	}()
 
-	client := &http.Client{}
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		err = fmt.Errorf("request initialization failed: %w", err)
-		return
+		return nil, 0, fmt.Errorf("request initialization failed: %w", err)
 	}
 	req.Header.Set(
 		"User-Agent",
@@ -44,48 +34,30 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 	req.Header.Set("Accept", "text/html")
 	req.Header.Set("Accept-Language", "en-US")
 
+	client := &http.Client{}
 	var res *http.Response
 	for attempt := range maxRetry {
 		if attempt > 0 {
-			Log.Network().Info(
-				"Retrying request",
-				"url", url,
-				"delay", fmt.Sprintf("%ds", delay),
-				"attempt", attempt+1,
-				"maxRetries", maxRetry,
-			)
+			log.Debug("Retrying request", "attempt", attempt+1)
 			time.Sleep(time.Second * time.Duration(delay))
 		}
 
 		res, err = client.Do(req)
 		if err != nil {
-			Log.Network().Warn(
-				"Request attempt failed",
-				"url", url,
-				"attempt", attempt+1,
-				"error", err,
-			)
 			continue
 		}
 
 		statusCode = res.StatusCode
 		if statusCode >= 500 || statusCode == 429 {
-			Log.Network().Warn(
-				"Received server error, will retry",
-				"url", url,
-				"statusCode", statusCode,
-				"attempt", attempt+1,
-			)
+			log.Warn("Server error, retrying", "statusCode", statusCode)
 			res.Body.Close()
 			continue
 		}
 
-		defer res.Body.Close()
-
 		body, err = io.ReadAll(res.Body)
+		res.Body.Close()
 		if err != nil {
-			Log.IO().Error("Failed to read response body", "url", url, "error", err)
-			err = fmt.Errorf("error reading response body: %w", err)
+			err = fmt.Errorf("failed to read response: %w", err)
 			continue
 		}
 
@@ -93,7 +65,7 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 		return
 	}
 
-	return nil, 0, fmt.Errorf("GET Request failed after %d retries with: %w", maxRetry, err)
+	return nil, 0, fmt.Errorf("all %d retries failed: %w", maxRetry, err)
 }
 
 // NormalizeUrl canonicalizes a URL: normalizes scheme/host/query/path, filters disallowed paths/queries/extensions.

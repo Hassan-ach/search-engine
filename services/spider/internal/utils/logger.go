@@ -145,10 +145,6 @@ func (l *Logger) Cache() *slog.Logger {
 	return l.With("Context", "Cache")
 }
 
-func (l *Logger) IO() *slog.Logger {
-	return l.With("Context", "IO")
-}
-
 func (l *Logger) Parsing() *slog.Logger {
 	return l.With("Context", "Parsing")
 }
