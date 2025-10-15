@@ -1,4 +1,35 @@
-*.html
+
+# === Rust ===
+target/
+**/*.rs.bk
+Cargo.lock
+Cargo.toml.orig
+
+# === Golang ===
+bin/
+build/
+dist/
+out/
+coverage/
+*.test
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.out
+
+# === Common ===
+.DS_Store
+.idea/
+.vscode/
 docs/
+.scannerwork/
+*.log
+.env
+*.html
 *.svg
 *.md
+*.txt
+*.png
+*.json
