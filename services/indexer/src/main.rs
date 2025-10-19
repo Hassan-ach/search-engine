@@ -43,7 +43,7 @@ fn main() {
     for t in texts {
         match t.as_ref() {
             Node::Text(x) => {
-                txt.push(x.clone());
+                txt.push(x.to_string());
             }
             Node::Element(_) => {}
         }
@@ -52,6 +52,13 @@ fn main() {
     // Example check
     assert_eq!(
         txt,
-        vec!["Heading", "Paragraph.", "Item 1", "Item 2", "Footer."]
+        vec![
+            "Example",
+            "Heading",
+            "Paragraph.",
+            "Item 1",
+            "Item 2",
+            "Footer."
+        ]
     );
 }

@@ -9,8 +9,8 @@ use html5ever::{
 
 #[derive(Debug, Clone)]
 pub enum Node {
-    Element(&'static QualName),
-    Text(String),
+    Element(QualName),
+    Text(StrTendril),
 }
 
 type Handle = Rc<Node>;
@@ -24,7 +24,7 @@ impl TextSink {
     pub fn new() -> Self {
         Self {
             elems: RefCell::new(vec![]),
-            doc: Rc::new(Node::Text("".to_string())),
+            doc: Rc::new(Node::Text(StrTendril::new())),
         }
     }
 }
@@ -54,11 +54,11 @@ impl TreeSink for TextSink {
     }
 
     fn create_comment(&self, text: StrTendril) -> Self::Handle {
-        Rc::new(Node::Text(text.to_string()))
+        Rc::new(Node::Text(text))
     }
 
     fn create_element(&self, name: QualName, _: Vec<Attribute>, _: ElementFlags) -> Self::Handle {
-        Rc::new(Node::Element(Box::leak(Box::new(name))))
+        Rc::new(Node::Element(name))
     }
 
     #[allow(unused_variables)]
@@ -68,10 +68,8 @@ impl TreeSink for TextSink {
 
     fn append(&self, _: &Self::Handle, child: NodeOrText<Self::Handle>) {
         if let NodeOrText::AppendText(t) = child {
-            if !t.trim().is_empty() {
-                self.elems
-                    .borrow_mut()
-                    .push(Rc::new(Node::Text(t.to_string())));
+            if t.chars().any(|c| !c.is_whitespace()) {
+                self.elems.borrow_mut().push(Rc::new(Node::Text(t)));
             }
         }
     }
@@ -99,9 +97,11 @@ impl TreeSink for TextSink {
     fn pop(&self, _node: &Self::Handle) {}
 
     fn get_template_contents(&self, _: &Self::Handle) -> Self::Handle {
-        Rc::new(Node::Element(Box::leak(Box::new(
-            html5ever::QualName::new(None, ns!(), local_name!("template")),
-        ))))
+        Rc::new(Node::Element(html5ever::QualName::new(
+            None,
+            ns!(),
+            local_name!("template"),
+        )))
     }
 
     #[allow(unused_variables)]
