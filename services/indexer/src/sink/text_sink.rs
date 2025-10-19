@@ -1,4 +1,4 @@
-use std::{borrow::Cow, cell::RefCell, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
 
 use html5ever::{
     interface::{ElementFlags, NodeOrText, QuirksMode, TreeSink},
@@ -10,35 +10,49 @@ use html5ever::{
 #[derive(Debug, Clone)]
 pub enum Node {
     Element(QualName),
-    Text(StrTendril),
 }
 
 type Handle = Rc<Node>;
 
+#[derive(Debug, Clone)]
 pub struct TextSink {
-    pub elems: RefCell<Vec<Handle>>,
+    pub texts: RefCell<Vec<StrTendril>>,
     pub doc: Handle,
 }
 
 impl TextSink {
     pub fn new() -> Self {
         Self {
-            elems: RefCell::new(vec![]),
-            doc: Rc::new(Node::Text(StrTendril::new())),
+            texts: RefCell::new(Vec::new()),
+            doc: Handle::new(Node::Element(QualName::new(None, ns!(), local_name!("")))),
         }
     }
 }
 impl TreeSink for TextSink {
-    type Output = Vec<Handle>;
+    type Output = HashMap<String, u32>;
     type Handle = Handle;
     type ElemName<'a> = &'a QualName;
 
     fn finish(self) -> Self::Output {
-        self.elems.into_inner()
+        let mut out: HashMap<String, u32> = HashMap::new();
+        for text in self.texts.into_inner() {
+            for word in text.to_lowercase().split_whitespace().filter_map(|w| {
+                let trimed_word = w.trim_matches(|c: char| {
+                    c.is_whitespace() || matches!(c, '.' | ',' | ':' | '/' | ';' | '"')
+                });
+                if trimed_word.is_empty() || trimed_word.parse::<u32>().is_ok() {
+                    return None;
+                }
+                Some(trimed_word.to_string())
+            }) {
+                *out.entry(word).or_insert(0) += 1;
+            }
+        }
+        out
     }
 
-    fn parse_error(&self, msg: Cow<'static, str>) {
-        eprintln!("Parse error: {msg}");
+    fn parse_error(&self, _msg: Cow<'static, str>) {
+        // eprintln!("Parse error: {msg}");
     }
 
     fn get_document(&self) -> Self::Handle {
@@ -46,49 +60,46 @@ impl TreeSink for TextSink {
     }
 
     fn elem_name<'a>(&'a self, target: &'a Self::Handle) -> Self::ElemName<'a> {
-        if let Node::Element(name) = target.as_ref() {
-            name
-        } else {
-            panic!("Not an element");
-        }
+        let Node::Element(name) = target.as_ref();
+        name
     }
 
-    fn create_comment(&self, text: StrTendril) -> Self::Handle {
-        Rc::new(Node::Text(text))
+    fn create_comment(&self, _text: StrTendril) -> Self::Handle {
+        Handle::new(Node::Element(QualName::new(None, ns!(), local_name!(""))))
     }
 
     fn create_element(&self, name: QualName, _: Vec<Attribute>, _: ElementFlags) -> Self::Handle {
-        Rc::new(Node::Element(name))
+        Handle::new(Node::Element(name))
     }
 
-    #[allow(unused_variables)]
-    fn create_pi(&self, target: StrTendril, data: StrTendril) -> Self::Handle {
-        unimplemented!()
+    fn create_pi(&self, _target: StrTendril, _data: StrTendril) -> Self::Handle {
+        Handle::new(Node::Element(QualName::new(None, ns!(), local_name!("pi"))))
     }
 
-    fn append(&self, _: &Self::Handle, child: NodeOrText<Self::Handle>) {
+    fn append(&self, parent: &Self::Handle, child: NodeOrText<Self::Handle>) {
         if let NodeOrText::AppendText(t) = child {
-            if t.chars().any(|c| !c.is_whitespace()) {
-                self.elems.borrow_mut().push(Rc::new(Node::Text(t)));
+            let Node::Element(name) = parent.as_ref();
+            let local = name.local.as_ref();
+            if local == "script" || local == "style" {
+                return; //ignore script and style elements
             }
+            self.texts.borrow_mut().push(t);
         }
     }
 
-    #[allow(unused_variables)]
     fn append_based_on_parent_node(
         &self,
-        element: &Self::Handle,
-        prev_element: &Self::Handle,
-        child: NodeOrText<Self::Handle>,
+        _element: &Self::Handle,
+        _prev_element: &Self::Handle,
+        _child: NodeOrText<Self::Handle>,
     ) {
     }
 
-    #[allow(unused_variables)]
     fn append_doctype_to_document(
         &self,
-        name: StrTendril,
-        public_id: StrTendril,
-        system_id: StrTendril,
+        _name: StrTendril,
+        _public_id: StrTendril,
+        _system_id: StrTendril,
     ) {
     }
 
@@ -97,28 +108,23 @@ impl TreeSink for TextSink {
     fn pop(&self, _node: &Self::Handle) {}
 
     fn get_template_contents(&self, _: &Self::Handle) -> Self::Handle {
-        Rc::new(Node::Element(html5ever::QualName::new(
+        Handle::new(Node::Element(html5ever::QualName::new(
             None,
             ns!(),
             local_name!("template"),
         )))
     }
 
-    #[allow(unused_variables)]
-    fn same_node(&self, x: &Self::Handle, y: &Self::Handle) -> bool {
+    fn same_node(&self, _: &Self::Handle, _: &Self::Handle) -> bool {
         false
     }
 
-    #[allow(unused_variables)]
-    fn set_quirks_mode(&self, mode: QuirksMode) {}
+    fn set_quirks_mode(&self, _mode: QuirksMode) {}
 
-    #[allow(unused_variables)]
-    fn append_before_sibling(&self, sibling: &Self::Handle, new_node: NodeOrText<Self::Handle>) {}
+    fn append_before_sibling(&self, _sibling: &Self::Handle, _new_node: NodeOrText<Self::Handle>) {}
 
-    #[allow(unused_variables)]
-    fn add_attrs_if_missing(&self, target: &Self::Handle, attrs: Vec<Attribute>) {}
+    fn add_attrs_if_missing(&self, _target: &Self::Handle, _attrs: Vec<Attribute>) {}
 
-    #[allow(unused_variables)]
     fn associate_with_form(
         &self,
         _target: &Self::Handle,
@@ -127,11 +133,9 @@ impl TreeSink for TextSink {
     ) {
     }
 
-    #[allow(unused_variables)]
-    fn remove_from_parent(&self, target: &Self::Handle) {}
+    fn remove_from_parent(&self, _target: &Self::Handle) {}
 
-    #[allow(unused_variables)]
-    fn reparent_children(&self, node: &Self::Handle, new_parent: &Self::Handle) {}
+    fn reparent_children(&self, _node: &Self::Handle, _new_parent: &Self::Handle) {}
 
     fn is_mathml_annotation_xml_integration_point(&self, _handle: &Self::Handle) -> bool {
         false
