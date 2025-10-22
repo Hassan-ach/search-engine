@@ -24,6 +24,7 @@ coverage/
 .idea/
 .vscode/
 docs/
+data/
 .scannerwork/
 *.log
 .env

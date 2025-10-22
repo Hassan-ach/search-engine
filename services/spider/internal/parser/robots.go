@@ -20,9 +20,13 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 	start := time.Now()
 	log := utils.Log.General()
 	log = log.With("operation", "NewHostMetaDta")
-	fmt.Println("Attempting to create new Host Meta Data Object")
+	fmt.Printf("Attempting to create new Host Meta Data Object. host: %s\n", raw)
 
-	u, err := url.Parse(raw)
+	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
+		raw = "https://" + raw
+	}
+
+	u, err := url.Parse(strings.TrimPrefix(raw, "www."))
 	if err != nil {
 		return
 	}
@@ -45,13 +49,11 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 
 	// normalize host
 	h = strings.TrimPrefix(u.Host, "www.")
+	u.Scheme = "https"
 	u.Host = h
 	u.RawQuery = ""
 	u.Fragment = ""
 	u.Path = "/robots.txt"
-	if u.Scheme == "" {
-		u.Scheme = "https"
-	}
 
 	// fetch robots.txt
 	robotsURL := u.String()

@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"spider/internal/config"
 	"spider/internal/entity"
 	"spider/internal/parser"
 	"spider/internal/store"
@@ -16,10 +17,9 @@ import (
 )
 
 var (
-	WG            sync.WaitGroup
-	maxGoroutines               = 10
-	CH            chan struct{} = make(chan struct{}, maxGoroutines)
-	Working       bool          = true
+	WG      sync.WaitGroup
+	CH      chan struct{} = make(chan struct{}, config.MaxGoRoutines)
+	Working bool          = true
 )
 
 // Run continuously executes the crawl process in an infinite loop.
@@ -54,24 +54,22 @@ func crawl() {
 
 	// Start and deferred logging
 	defer func() {
-		execTime := time.Since(start)
 		// Logs failed crawl if err is set
 		if err != nil {
 			log.Warn("Failed to crawl", "error", err, "url", rawUrl)
 			return
 		}
-		// Logs crawl process completion and duration
-		log.Info("Crawl process finished.", "execTime", execTime, "url", rawUrl)
 	}()
 
 	// Fetches next URL from Redis and handles empty set or errors.
-	rawUrl, ok, _ = store.GetUrl()
+	rawUrl, ok, err = store.GetUrl()
 	if !ok {
 		// err = fmt.Errorf("Failed to Get Url from store")
 		// switch log to Cache context
 		log = utils.Log.Cache().With("operation", "Crawl")
 		return
 	}
+	log.Info("Url received", "url", rawUrl)
 
 	u, err := url.Parse(rawUrl)
 	if err != nil {
@@ -105,7 +103,8 @@ func crawl() {
 		store.Page(*page)
 	}()
 	store.AddUrls(page.Links.GetAll())
-	log.Info("Page crawled successfully", "host", host.Name)
+	execTime := time.Since(start)
+	log.Info("Page crawled successfully", "execTime", execTime, "host", host.Name)
 }
 
 func getOrBuildHostMeta(h string) (host *entity.Host, err error) {

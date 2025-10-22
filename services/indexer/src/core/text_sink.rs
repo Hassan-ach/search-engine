@@ -1,21 +1,28 @@
-use std::{borrow::Cow, cell::RefCell, collections::HashMap, rc::Rc};
+use std::{borrow::Cow, cell::RefCell, collections::HashMap, io::Cursor, io::Error, rc::Rc};
 
 use html5ever::{
     interface::{ElementFlags, NodeOrText, QuirksMode, TreeSink},
-    local_name, ns,
-    tendril::StrTendril,
+    local_name, ns, parse_document,
+    tendril::{StrTendril, TendrilSink},
     Attribute, QualName,
 };
 
+pub async fn parse(html: String) -> Result<HashMap<String, u32>, Error> {
+    //
+    parse_document(TextSink::new(), Default::default())
+        .from_utf8()
+        .read_from(&mut Cursor::new(html.as_bytes()))
+}
+
 #[derive(Debug, Clone)]
-pub enum Node {
+enum Node {
     Element(QualName),
 }
 
 type Handle = Rc<Node>;
 
 #[derive(Debug, Clone)]
-pub struct TextSink {
+struct TextSink {
     pub texts: RefCell<Vec<StrTendril>>,
     pub doc: Handle,
 }
@@ -28,6 +35,7 @@ impl TextSink {
         }
     }
 }
+
 impl TreeSink for TextSink {
     type Output = HashMap<String, u32>;
     type Handle = Handle;
@@ -52,7 +60,7 @@ impl TreeSink for TextSink {
     }
 
     fn parse_error(&self, _msg: Cow<'static, str>) {
-        // eprintln!("Parse error: {msg}");
+        // eprintln!("Parse error: {_msg}");
     }
 
     fn get_document(&self) -> Self::Handle {

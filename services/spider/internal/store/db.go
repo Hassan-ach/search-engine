@@ -8,27 +8,20 @@ import (
 
 	_ "github.com/lib/pq"
 
+	"spider/internal/config"
 	"spider/internal/entity"
 	"spider/internal/utils"
-)
-
-const (
-	host     = "localhost"
-	port     = 5432
-	user     = "admin"
-	password = "1234"
-	dbname   = "se"
 )
 
 // NewDbClient creates and returns a PostgreSQL DB client.
 func NewDbClient() *sql.DB {
 	psqlconn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		host,
-		port,
-		user,
-		password,
-		dbname,
+		config.PgHost,
+		config.PgPort,
+		config.PgUser,
+		config.PgPassword,
+		config.PgDbname,
 	)
 
 	// Open connection. sql.Open does not establish a connection immediately, it validates arguments.
@@ -45,6 +38,8 @@ func NewDbClient() *sql.DB {
 	if err != nil {
 		log.Fatalf("Failed to ping postgres ERROR: %v", err)
 	}
+
+	fmt.Println("Data bae Connectd")
 
 	return db
 }

@@ -1,0 +1,22 @@
+services:
+  db:
+    image: postgres
+    container_name: psql
+    restart: unless-stopped
+    volumes:
+      - ./migration:/docker-entrypoint-initdb.d
+      - ./data/db:/var/lib/postgresql
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: ${PG_DBNAME}
+    ports:
+      - "${PG_PORT}:5432"
+  cache:
+    image: redis
+    container_name: redis
+    restart: unless-stopped
+    volumes:
+      - ./data/cache:/data
+    ports:
+      - "${REDIS_PORT}:6379"

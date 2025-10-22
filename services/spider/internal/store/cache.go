@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/gob"
+	"fmt"
 	"log"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 
+	"spider/internal/config"
 	"spider/internal/entity"
 	"spider/internal/utils"
 )
@@ -17,11 +19,10 @@ import (
 // Registers entity.Host type with gob for serialization.
 func NewCacheClient() *redis.Client {
 	client := redis.NewClient(&redis.Options{
-		Addr:     "localhost:6379",
-		Password: "", // No password set
-		DB:       0,  // Use default DB
-		Protocol: 2,  // Connection protocol
-
+		Addr:     config.RdAddr,
+		Password: config.RdPassword,
+		DB:       config.RdDb,
+		Protocol: 2,
 	})
 
 	// Ping to ensure Redis connection is alive
@@ -31,6 +32,7 @@ func NewCacheClient() *redis.Client {
 	}
 	// Required for gob encoding/decoding of Host structs
 	gob.Register(entity.Host{})
+	fmt.Println("Cache Connected")
 	return client
 }
 
@@ -87,42 +89,33 @@ func GetHostMetaData(h string) (*entity.Host, bool) {
 // GetUrl retrieves a URL from Redis atomically.
 // Skips URLs if host is recently visited or URL is already visited.
 // Uses Lua script to ensure atomicity.
-func GetUrl() (u string, ok bool, err error) {
+func GetUrl() (string, bool, error) {
 	script := redis.NewScript(`
--- KEYS[1] = urls set
--- KEYS[2] = visitedUrls set
+	local res = redis.call("zpopmax", KEYS[1])
+	if not res[1] then
+	    return false
+	end
+	local url = res[1]
+	local score = res[2]
 
-local url = redis.call("zpopmax", KEYS[1])
-if not url then
-    return nil
-end
+	local host = url:match("^https?://([^/]+)")
+	if host and redis.call("get", host) == "1" then
+	    redis.call("zadd", KEYS[1], score, url)
+	    return false
+	end
 
--- parse host from URL in Lua (simplified: assume full URL)
-local host = url:match("^https?://([^/]+)")
-if host then
-    if redis.call("get", host) == "1" then
-        redis.call("sadd", KEYS[1], url)
-        return nil
-    end
-end
+	if redis.call("sismember", KEYS[2], url) == 1 then
+	    return false
+	end
 
-if redis.call("sismember", KEYS[2], url) == 1 then
-    redis.call("sadd", KEYS[1], url)
-    return nil
-end
+	return url
+	`)
 
-return url
-`)
-
-	for {
+	const maxRetry = 100
+	for range maxRetry {
 		val, err := script.Run(ctx, Cache, []string{"urls", "visitedUrls"}).Result()
-		// if err == redis.Nil {
-		// 	utils.Log.Cache().Info("No URLs left in Redis")
-		// 	return "", false, nil
-		// }
 		if err != nil {
 			utils.Log.Cache().Debug("Redis Lua Failed", "error", err)
-			// time.Sleep(50 * time.Millisecond) // avoid busy spin
 			continue
 		}
 
@@ -131,10 +124,10 @@ return url
 			return valStr, true, nil
 		}
 
-		// skipped URL due to visited host or visited URL
 		utils.Log.Cache().Debug("Skipped URL from Lua script, retrying")
 		time.Sleep(10 * time.Millisecond)
 	}
+	return "", false, fmt.Errorf("no valid URL after %d retries", maxRetry)
 }
 
 // AddUrls adds multiple URLs to Redis set.
@@ -144,6 +137,12 @@ func AddUrls(urls []string) {
 		utils.Log.Cache().Debug("no URLs provided to AddUrls")
 		return
 	}
+	_, err := Cache.Ping(ctx).Result()
+	if err != nil {
+		utils.Log.Cache().Error("Redis connection failed", "error", err)
+		return
+	}
+
 	count := 0
 	for _, url := range urls {
 		err := Cache.ZIncrBy(ctx, "urls", 1, url).Err()

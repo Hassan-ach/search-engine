@@ -6,8 +6,8 @@ import (
 )
 
 var (
+	DB                    = NewDbClient()
 	ctx   context.Context = context.Background()
 	Cache                 = NewCacheClient()
-	DB                    = NewDbClient()
-	WG     sync.WaitGroup
+	WG    sync.WaitGroup
 )
