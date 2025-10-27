@@ -8,7 +8,6 @@ use html5ever::{
 };
 
 pub async fn parse(html: String) -> Result<HashMap<String, u32>, Error> {
-    //
     parse_document(TextSink::new(), Default::default())
         .from_utf8()
         .read_from(&mut Cursor::new(html.as_bytes()))
@@ -50,6 +49,13 @@ impl TreeSink for TextSink {
                 });
                 if trimed_word.is_empty() || trimed_word.parse::<u32>().is_ok() {
                     return None;
+                }
+                // remove every word that is not an English word
+                // so no symbols in my data words
+                for c in trimed_word.chars() {
+                    if !c.is_alphabetic() {
+                        return None;
+                    }
                 }
                 Some(trimed_word.to_string())
             }) {
