@@ -19,6 +19,9 @@ coverage/
 *.dylib
 *.out
 
+# === Python ===
+venv/
+
 # === Common ===
 .DS_Store
 .idea/
