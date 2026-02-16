@@ -4,7 +4,7 @@ use std::env;
 use std::error::Error;
 use std::sync::OnceLock;
 
-use sqlx::{query, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 use tracing::{info, warn};
 use uuid::Uuid;
 
@@ -37,12 +37,12 @@ pub async fn init() {
 }
 
 pub async fn get_page() -> Result<Page, Box<dyn Error>> {
-    let mut tx = EXECUTER.get().unwrap().begin().await?;
+    let tx = EXECUTER.get().unwrap().begin().await?;
 
     // Create a query type mapping
     let query = sqlx::query_as::<_, Page>(
         "WITH cte AS (
-             SELECT id, url, html
+             SELECT id, url_id, html
              FROM pages
              WHERE indexed = FALSE
              FOR UPDATE SKIP LOCKED
@@ -53,7 +53,7 @@ pub async fn get_page() -> Result<Page, Box<dyn Error>> {
         SET indexed = TRUE
         FROM cte
         WHERE pages.id = cte.id
-        RETURNING pages.id, pages.url, pages.html",
+        RETURNING pages.id, pages.url_id, pages.html",
     );
 
     // Fetch Optional row
@@ -65,50 +65,86 @@ pub async fn get_page() -> Result<Page, Box<dyn Error>> {
 }
 
 pub async fn batch_words(words: HashMap<String, u32>, page_id: Uuid) {
-    for (word, count) in words.into_iter() {
-        let word_id = match get_id_or_insert(&word).await {
-            Some(id) => id,
-            None => {
-                warn!(word = %word, count = count,"no id found");
-                continue;
-            }
-        };
-
-        let res = query!(
-            "INSERT INTO page_word(page_id, word_id, tf) VALUES ($1, $2, $3)",
-            page_id,
-            word_id,
-            count as i32
-        )
-        .execute(EXECUTER.get().unwrap())
-        .await;
-
-        if let Err(err) = res {
-            warn!(?err, word = %word, count = count, "Failed to index word");
-        }
+    if words.is_empty() {
+        warn!(page_id = %page_id, "no words to index");
+        return;
     }
-}
 
-async fn get_id_or_insert(word: &str) -> Option<Uuid> {
-    let row = query!("SELECT id FROM words WHERE word = $1", word)
-        .fetch_optional(EXECUTER.get().unwrap())
-        .await
-        .ok()?;
-
-    let id = if let Some(row) = row {
-        row.id
-    } else {
-        let inserted = query!("INSERT INTO words (word) VALUES ($1) RETURNING id", word)
-            .fetch_one(EXECUTER.get().unwrap())
-            .await;
-        match inserted {
-            Ok(inset) => inset.id,
-            Err(err) => {
-                warn!(?err,word= %word, "faild to insert word");
-                return None;
-            }
+    let map = match upsert_words(words.clone().into_keys().collect()).await {
+        Some(m) => m,
+        None => {
+            warn!(page_id = %page_id, "failed to upsert words");
+            return;
         }
     };
 
-    Some(id)
+    let word_id_count: HashMap<Uuid, u32> = map
+        .into_iter()
+        .filter_map(|(word, id)| words.get(&word).map(|count| (id, *count)))
+        .collect();
+
+    if let Err(err) = link_words_to_page(page_id, word_id_count).await {
+        warn!(?err, page_id = %page_id, "failed to link words to page");
+    }
+}
+
+async fn link_words_to_page(
+    page_id: Uuid,
+    word_id_count: HashMap<Uuid, u32>,
+) -> Result<(), sqlx::Error> {
+    if word_id_count.is_empty() {
+        return Ok(());
+    }
+
+    let mut word_ids = Vec::with_capacity(word_id_count.len());
+    let mut counts = Vec::with_capacity(word_id_count.len());
+
+    for (id, count) in word_id_count {
+        word_ids.push(id);
+        counts.push(count as i32);
+    }
+
+    sqlx::query!(
+        r#"
+        INSERT INTO page_word (page_id, word_id, tf)
+        SELECT $1, * FROM UNNEST($2::uuid[], $3::int4[])
+        ON CONFLICT (page_id, word_id) DO NOTHING
+        "#,
+        page_id,
+        &word_ids,
+        &counts
+    )
+    .execute(EXECUTER.get().expect("DB not initialized"))
+    .await?;
+
+    Ok(())
+}
+
+// Function to insert words in batch and return their ids
+async fn upsert_words(words: Vec<String>) -> Option<HashMap<String, Uuid>> {
+    if words.is_empty() {
+        return Some(HashMap::new());
+    }
+
+    // Using UNNEST to pass the entire vector as one parameter ($1)
+    let rows = sqlx::query!(
+        r#"
+        INSERT INTO words (word)
+        SELECT * FROM UNNEST($1::text[])
+        ON CONFLICT (word) DO UPDATE 
+            SET word = EXCLUDED.word
+        RETURNING id, word
+        "#,
+        &words[..]
+    )
+    .fetch_all(EXECUTER.get().expect("DB not initialized"))
+    .await
+    .ok()?;
+
+    let mut ids = HashMap::with_capacity(rows.len());
+    for row in rows {
+        ids.insert(row.word, row.id);
+    }
+
+    Some(ids)
 }
