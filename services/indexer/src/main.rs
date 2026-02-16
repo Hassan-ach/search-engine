@@ -32,6 +32,11 @@ async fn init() -> Result<(), Box<dyn Error>> {
         std::env::var("PG_DBNAME").unwrap_or("not set".to_string())
     );
 
+    println!(
+        "DATABASE_URL={}",
+        std::env::var("DATABASE_URL").unwrap_or("not set".to_string())
+    );
+
     let log_file = fs::OpenOptions::new()
         .create(true)
         .append(true)
