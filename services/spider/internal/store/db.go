@@ -11,7 +11,6 @@ import (
 
 	"spider/internal/config"
 	"spider/internal/entity"
-	"spider/internal/utils"
 )
 
 // NewDbClient creates and returns a PostgreSQL DB client.
@@ -46,90 +45,76 @@ func NewDbClient() *sql.DB {
 }
 
 // Page stores a crawled page in the "pages" table.
-func Page(page entity.Page) {
-	// Convert the metadata struct to JSON for JSONB storage
+func Page(page entity.Page) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	var url_id string
+	err = DB.QueryRow(
+		`INSERT INTO urls(url) VALUES ($1) 
+				ON CONFLICT (url) DO UPDATE SET url = urls.url
+				RETURNING id`,
+		page.URL).Scan(&url_id)
+	if err != nil {
+		return fmt.Errorf("upsert url: %w", err)
+	}
+
 	metadata, err := json.Marshal(page.MetaData)
 	if err != nil {
-		utils.Log.DB().
-			Error("Failed to create metadata JSON", "error", err, "url", page.URL, "operation", "store.Page")
-		return
+		return fmt.Errorf("marshal metadata: %w", err)
 	}
 
-	insertStmt := `INSERT INTO "pages"("url","html","metadata") VALUES ($1,$2,$3)`
-	_, err = DB.Exec(insertStmt, page.URL, page.HTML, metadata)
+	_, err = DB.Exec(
+		`INSERT INTO pages(url_id, html, metadata) VALUES ($1,$2,$3)`,
+		url_id,
+		page.HTML,
+		metadata,
+	)
 	if err != nil {
-		utils.Log.DB().
-			Error("Failed to insert page data", "error", err, "url", page.URL, "operation", "store.Page")
-		return
+		return fmt.Errorf("insert page : %w", err)
 	}
 
-	utils.Log.DB().
-		Info("Page data inserted successfully", "url", page.URL, "operation", "store.Page")
+	return tx.Commit()
 }
 
-// AddGraphEdges source → many targets
-// - upserts all URLs (source + targets)
-// - gets their IDs
+// InsertGraphEdges from page id → many page ids
 // - batch-inserts edges using IDs
-func AddGraphEdges(source string, targets []string) {
-	if len(targets) == 0 {
-		return
+func InsertGraphEdges(from_url_id string, to_url_ids []string) error {
+	if len(to_url_ids) == 0 {
+		return nil
 	}
 
-	allURLs := append([]string{source}, targets...)
-
-	// 1. Batch upsert URLs → get id ↔ url map
-	urlToID, err := upsertURLsAndGetIDs(allURLs)
-	if err != nil {
-		utils.Log.DB().
-			Error("upsert urls failed", "error", err, "source", source, "operation", "store.AddGraphEdges")
-		return
-	}
-
-	sourceID, ok := urlToID[source]
-	if !ok {
-		utils.Log.DB().
-			Error("source url disappeared after upsert", "source", source, "operation", "store.AddGraphEdges")
-		return
-	}
-
-	// 2. Prepare batch edge insert
 	var (
 		placeholders []string
 		args         []any
 	)
 
-	for _, target := range targets {
-		targetID, exists := urlToID[target]
-		if !exists {
-			utils.Log.DB().
-				Error("target url missing after upsert", "target", target, "operation", "store.AddGraphEdges")
-			return
-		}
-
+	for _, to_url_id := range to_url_ids {
 		placeholders = append(placeholders, fmt.Sprintf("($%d, $%d)", len(args)+1, len(args)+2))
-		args = append(args, sourceID, targetID)
+		args = append(args, from_url_id, to_url_id)
 	}
 
-	query := `INSERT INTO graph_edges (source, target) VALUES ` +
+	query := `INSERT INTO graph_edges (from_url, to_url) VALUES ` +
 		strings.Join(placeholders, ", ") +
-		` ON CONFLICT DO NOTHING` // or DO UPDATE if you have unique constraint + want to update something
+		` ON CONFLICT DO NOTHING`
 
-	_, err = DB.Exec(query, args...)
+	_, err := DB.Exec(query, args...)
 	if err != nil {
-		utils.Log.DB().
-			Error("batch insert graph_edges failed", "error", err, "source", source, "operation", "store.AddGraphEdges")
-		return
+		return fmt.Errorf("batch insert graph_edges: %w", err)
 	}
+
+	return nil
 }
 
-// upsertURLsAndGetIDs inserts or gets existing IDs — returns map[url]→id
-func upsertURLsAndGetIDs(urls []string) (map[string]string, error) {
+// InsertURLs inserts or gets existing IDs — returns []string [from_url_id, to_url_ids...]
+func InsertURLs(urls []string) ([]string, error) {
 	if len(urls) == 0 {
-		return make(map[string]string), nil
+		return make([]string, 0), nil
 	}
 
-	// Build VALUES clause
 	var values []string
 	args := make([]any, 0, len(urls))
 
@@ -140,17 +125,18 @@ func upsertURLsAndGetIDs(urls []string) (map[string]string, error) {
 
 	query := fmt.Sprintf(`
 		WITH input(url) AS (
-			VALUES %s
+			SELECT DISTINCT url FROM (VALUES %s) AS v(url)
 		),
-		upserted AS (
-			INSERT INTO urls (url)
-			SELECT url FROM input
-			ON CONFLICT (url) DO UPDATE
-				SET url = EXCLUDED.url          
-			RETURNING id, url
+		ins AS (
+		    INSERT INTO urls (url)
+		    SELECT url FROM input
+		    ON CONFLICT (url) DO NOTHING
+		    RETURNING id, url
 		)
-		SELECT id, url FROM upserted
-	`, strings.Join(values, ","))
+		SELECT u.id
+		FROM input i
+		JOIN urls u ON u.url = i.url
+		`, strings.Join(values, ","))
 
 	rows, err := DB.Query(query, args...)
 	if err != nil {
@@ -158,22 +144,20 @@ func upsertURLsAndGetIDs(urls []string) (map[string]string, error) {
 	}
 	defer rows.Close()
 
-	m := make(map[string]string, len(urls))
+	m := make([]string, 0, len(urls))
 
 	for rows.Next() {
 		var id string
-		var url string
-		if err := rows.Scan(&id, &url); err != nil {
+		if err := rows.Scan(&id); err != nil {
 			return nil, fmt.Errorf("scan failed: %w", err)
 		}
-		m[url] = id
+		m = append(m, id)
 	}
 
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
 
-	// Safety: make sure we got everything back (very rare race, but good to check)
 	if len(m) != len(urls) {
 		return nil, fmt.Errorf("got %d ids back, expected %d", len(m), len(urls))
 	}
