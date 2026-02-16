@@ -30,6 +30,7 @@ func NewCacheClient() *redis.Client {
 	if err != nil {
 		log.Fatalf("Failed to connected to redis ERROR: %v", err)
 	}
+
 	// Required for gob encoding/decoding of Host structs
 	gob.Register(entity.Host{})
 	fmt.Println("Cache Connected")
@@ -40,50 +41,45 @@ func NewCacheClient() *redis.Client {
 // Logs warnings for invalid input and errors for encoding/storage failures.
 func AddHostMetaData(h string, host *entity.Host) error {
 	if h == "" || host == nil {
-		utils.Log.Cache().Warn("invalid input for AddHostMetaData", "host", h)
 		return nil
 	}
 
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(host); err != nil {
-		utils.Log.Cache().Error("failed to encode host metadata", "error", err, "host", h)
-
-		return err
+		utils.Log.Cache().Debug("encode host metadata", "host", h, "error", err)
+		return fmt.Errorf("encode metadata: %w", err)
 	}
 
 	err := Cache.HSet(ctx, "hosts", h, buf.Bytes()).Err()
 	if err != nil {
-		utils.Log.Cache().Error("failed to store host metadata", "error", err, "host", h)
-		return err
+		utils.Log.Cache().Debug("store host metadata", "host", h, "error", err)
+		return fmt.Errorf("store metadata: %w", err)
 	}
 
-	utils.Log.Cache().Info("host metadata stored successfully", "host", h)
 	return nil
 }
 
 // GetHostMetaData retrieves and decodes a Host struct from Redis.
 // Logs each step: retrieval, missing host, decode error, successful fetch.
-func GetHostMetaData(h string) (*entity.Host, bool) {
-	utils.Log.Cache().Info("retrieving host metadata", "host", h)
-
+func GetHostMetaData(h string) (*entity.Host, bool, error) {
 	val, err := Cache.HGet(ctx, "hosts", h).Bytes()
 	if err == redis.Nil {
-		utils.Log.Cache().Warn("host metadata not found", "host", h)
-		return nil, false
+		utils.Log.Cache().Debug("host metadata not found", "host", h)
+		return nil, false, fmt.Errorf("host metadata not found for host: %s", h)
 	}
+
 	if err != nil {
-		utils.Log.Cache().Error("redis error retrieving host metadata", "error", err, "host", h)
-		return nil, false
+		utils.Log.Cache().Debug("retrieve host metadata", "host", h, "error", err)
+		return nil, false, fmt.Errorf("retrieve host metadata: %w", err)
 	}
 
 	var host entity.Host
 	if err := gob.NewDecoder(bytes.NewReader(val)).Decode(&host); err != nil {
-		utils.Log.Cache().Error("failed to decode host metadata", "error", err, "host", h)
-		return nil, false
+		utils.Log.Cache().Debug("decode host metadata", "host", h, "error", err)
+		return nil, false, fmt.Errorf("decode host metadata: %w", err)
 	}
 
-	utils.Log.Cache().Info("host metadata retrieved successfully", "host", h)
-	return &host, true
+	return &host, true, nil
 }
 
 // GetUrl retrieves a URL from Redis atomically.
@@ -115,59 +111,57 @@ func GetUrl() (string, bool, error) {
 	for range maxRetry {
 		val, err := script.Run(ctx, Cache, []string{"urls", "visitedUrls"}).Result()
 		if err != nil {
-			utils.Log.Cache().Debug("Redis Lua Failed", "error", err)
 			continue
 		}
 
 		if valStr, ok := val.(string); ok && valStr != "" {
-			utils.Log.Cache().Info("URL retrieved successfully", "url", valStr)
 			return valStr, true, nil
 		}
 
-		utils.Log.Cache().Debug("Skipped URL from Lua script, retrying")
 		time.Sleep(10 * time.Millisecond)
 	}
+	utils.Log.Cache().Debug("failed to get valid URL after retries")
 	return "", false, fmt.Errorf("no valid URL after %d retries", maxRetry)
 }
 
 // AddUrls adds multiple URLs to Redis set.
 // Logs warnings for empty input and errors for failed Redis operations.
-func AddUrls(urls []string) {
+func AddUrls(urls []string) error {
 	if len(urls) == 0 {
-		utils.Log.Cache().Debug("no URLs provided to AddUrls")
-		return
-	}
-	_, err := Cache.Ping(ctx).Result()
-	if err != nil {
-		utils.Log.Cache().Error("Redis connection failed", "error", err)
-		return
+		utils.Log.Cache().Debug("empty URL list passed to AddUrls")
+		return nil
 	}
 
-	count := 0
+	pipe := Cache.Pipeline()
+
 	for _, url := range urls {
-		err := Cache.ZIncrBy(ctx, "urls", 1, url).Err()
-		if err != nil {
-			utils.Log.Cache().Warn("failed to add URLs", "error", err)
-			continue
-		}
-		count++
+		pipe.ZIncrBy(ctx, "urls", 1, url)
 	}
-	utils.Log.Cache().Info("URLs added successfully", "count", count)
+
+	_, err := pipe.Exec(ctx)
+	if err != nil {
+		utils.Log.Cache().Debug("add URLs", "error", err)
+		return fmt.Errorf("add URLs: %w", err)
+	}
+
+	return nil
 }
 
 // AddToVisitedUrl adds a URL to the visitedUrls set.
 // Logs warnings for empty input and errors if Redis fails.
-func AddToVisitedUrl(u string) {
+func AddToVisitedUrl(u string) error {
 	if u == "" {
 		utils.Log.Cache().Debug("empty URL passed to AddToVisitedUrl")
-		return
+		return nil
 	}
+
 	err := Cache.SAdd(ctx, "visitedUrls", u).Err()
 	if err != nil {
-		utils.Log.Cache().Warn("failed to add visited URL", "url", u, "error", err)
-		return
+		utils.Log.Cache().Debug("add to visited URLs", "url", u, "error", err)
+		return fmt.Errorf("add to visited URLs: %w", err)
 	}
-	utils.Log.Cache().Info("added visited URL", "url", u)
+
+	return nil
 }
 
 // AddToWaitedHost adds a host key in Redis with a TTL corresponding to delay.
@@ -180,8 +174,7 @@ func AddToWaitedHost(h string, delay int) {
 
 	err := Cache.Set(ctx, h, 1, time.Duration(delay)*time.Second).Err()
 	if err != nil {
-		utils.Log.Cache().Warn("failed to add waited host", "host", h, "error", err)
+		utils.Log.Cache().Debug("add to waited host", "host", h, "error", err)
 		return
 	}
-	utils.Log.Cache().Info("added waited host", "host", h)
 }

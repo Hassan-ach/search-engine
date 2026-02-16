@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"spider/internal/config"
 	"spider/internal/entity"
@@ -43,7 +42,7 @@ func Run(starters []string) {
 // processes the page, normalizes links (removing disallowed paths), updates
 // Redis sets and counters, persists the page, and logs success or errors.
 func crawl() {
-	start := time.Now()
+	// start := time.Now()
 	log := utils.Log.General().With("operation", "Crawl")
 
 	var (
@@ -52,28 +51,18 @@ func crawl() {
 		rawUrl string
 	)
 
-	// Start and deferred logging
-	defer func() {
-		// Logs failed crawl if err is set
-		if err != nil {
-			log.Warn("Failed to crawl", "error", err, "url", rawUrl)
-			return
-		}
-	}()
-
 	// Fetches next URL from Redis and handles empty set or errors.
 	rawUrl, ok, err = store.GetUrl()
 	if !ok {
-		// err = fmt.Errorf("Failed to Get Url from store")
-		// switch log to Cache context
-		log = utils.Log.Cache().With("operation", "Crawl")
+		utils.Log.Cache().Debug("No URL to crawl, waiting...", "error", err)
 		return
 	}
-	log.Info("Url received", "url", rawUrl)
+	log.Info("url received", "url", rawUrl)
 
 	u, err := url.Parse(rawUrl)
 	if err != nil {
 		// URL is invalid, skip crawl
+		utils.Log.General().Debug("invalid url", "url", rawUrl, "error", err)
 		return
 	}
 
@@ -102,13 +91,29 @@ func crawl() {
 		defer store.WG.Done()
 		store.Page(*page)
 	}()
+	store.WG.Add(1)
+	go func() {
+		defer store.WG.Done()
+		ids, err := store.InsertURLs(append([]string{rawUrl}, page.Links.GetAll()...))
+		if err != nil {
+			log.
+				Error("insert urls ", "url", rawUrl, "error", err)
+			return
+		}
+		err = store.InsertGraphEdges(ids[0], ids[1:])
+		if err != nil {
+			log.
+				Error("insert graph edges", "url", rawUrl, "error", err)
+			return
+		}
+	}()
 	store.AddUrls(page.Links.GetAll())
-	execTime := time.Since(start)
-	log.Info("Page crawled successfully", "execTime", execTime, "host", host.Name)
+	// execTime := time.Since(start)
+	// log.Info("Page crawled successfully", "execTime", execTime, "host", host.Name)
 }
 
 func getOrBuildHostMeta(h string) (host *entity.Host, err error) {
-	host, ok := store.GetHostMetaData(strings.TrimPrefix(h, "www."))
+	host, ok, err := store.GetHostMetaData(strings.TrimPrefix(h, "www."))
 	if !ok {
 		// Host metadata missing; generate using parser
 		host, err = parser.NewHostMetaDta(h)

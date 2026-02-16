@@ -11,17 +11,18 @@ import (
 )
 
 func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err error) {
-	start := time.Now()
+	// start := time.Now()
 	log := Log.Network().With("url", url, "operation", "GetReq")
 
-	defer func() {
-		log = log.With("execTime", time.Since(start))
-		if err != nil {
-			log.Error("GET Request failed", "error", err)
-		} else {
-			log.Info("GET Request succeeded")
-		}
-	}()
+	// defer func() {
+	// 	log.Debug(
+	// 		"Request completed",
+	// 		"statusCode",
+	// 		statusCode,
+	// 		"duration",
+	// 		time.Since(start),
+	// 	)
+	// }()
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
@@ -49,7 +50,7 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 
 		statusCode = res.StatusCode
 		if statusCode >= 500 || statusCode == 429 {
-			log.Warn("Server error, retrying", "statusCode", statusCode)
+			log.Debug("Server error, retrying", "statusCode", statusCode)
 			res.Body.Close()
 			continue
 		}

@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"time"
 
 	"spider/internal/entity"
 	"spider/internal/store"
@@ -17,9 +16,6 @@ import (
 // and sitemaps. It persists the Host object in the store and returns it.
 // Logs the full process including execution time and success/failure.
 func NewHostMetaDta(raw string) (host *entity.Host, err error) {
-	start := time.Now()
-	log := utils.Log.General()
-	log = log.With("operation", "NewHostMetaDta")
 	fmt.Printf("Attempting to create new Host Meta Data Object. host: %s\n", raw)
 
 	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
@@ -31,24 +27,8 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 		return
 	}
 
-	var h string
-	defer func() {
-		execTime := time.Since(start)
-		finalLog := log.With("host", h, "execTime", execTime)
-		if err != nil {
-			finalLog.Error("Host Meta Data retrieve failed", "error", err)
-			return
-		}
-		finalLog.Info("Host Meta Data retrieve completed successfully")
-		finalLog.Debug(
-			"",
-			"Host Meta Data",
-			host.String(),
-		)
-	}()
+	h := strings.TrimPrefix(u.Host, "www.")
 
-	// normalize host
-	h = strings.TrimPrefix(u.Host, "www.")
 	u.Scheme = "https"
 	u.Host = h
 	u.RawQuery = ""
@@ -60,8 +40,7 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 	var body []byte
 	body, _, err = utils.GetReq(robotsURL, 3, 5)
 	if err != nil {
-		err = fmt.Errorf("failed to get robots.txt: %w", err)
-		return nil, err
+		return nil, fmt.Errorf("get robots.txt: %w", err)
 	}
 
 	// parse robots.txt for rules and sitemaps
@@ -90,24 +69,13 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 // Returns lists of allowed URLs, disallowed paths, crawl delay, and sitemap URLs.
 // Logs start, end, and details about each rule parsed.
 func parseRobots(file, userAgent string) (allow, disallow []string, delay int, sitemaps []string) {
-	log := utils.Log.Parsing().With("operation", "parseRobots")
-	start := time.Now()
 	fmt.Println("Starting robots.txt parsing")
-
-	defer func() {
-		log.Info(
-			"Finished parsing robots.txt",
-			"execTime", time.Since(start),
-			"allowRules", len(allow),
-			"disallowRules", len(disallow),
-			"sitemapsFound", len(sitemaps),
-			"finalCrawlDelay", delay,
-		)
-	}()
 
 	if userAgent == "" {
 		userAgent = "*"
 	}
+
+	log := utils.Log.Parsing().With("operation", "parseRobots", "userAgent", userAgent)
 
 	lines := strings.Split(file, "\n")
 	var activeAgent bool
@@ -123,12 +91,11 @@ func parseRobots(file, userAgent string) (allow, disallow []string, delay int, s
 		case strings.HasPrefix(lower, "user-agent:"):
 			ua := strings.TrimSpace(line[len("User-agent:"):])
 			activeAgent = (ua == userAgent || ua == "*")
+
 			log.Debug(
 				"Processing User-agent",
 				"line",
 				line,
-				"targetAgent",
-				userAgent,
 				"isActive",
 				activeAgent,
 			)
@@ -169,28 +136,14 @@ func parseRobots(file, userAgent string) (allow, disallow []string, delay int, s
 // Returns a flattened list of normalized URLs found across all sitemaps.
 // Logs start, end, execution time, number of extracted links, failed sitemaps.
 func sitemapsProcess(s []string, host string) []string {
-	start := time.Now()
 	log := utils.Log.General().With("operation", "sitemapsProcess", "host", host)
 	fmt.Println("Starting sitemap processing")
 
 	var r []string
 	failedSites := 0
 
-	defer func() {
-		log.Info(
-			"Sitemap processing finished",
-			"extractedLinks", len(r),
-			"failedSitemaps", failedSites,
-			"totalSitemaps", len(s),
-			"execTime", time.Since(start),
-		)
-	}()
-
 	for _, sitemapURL := range s {
-		siteUrl, err := url.Parse(sitemapURL)
-		if err != nil {
-			utils.Log.Parsing().Warn("Failed to parse url", "url", sitemapURL, "error", err)
-		}
+		siteUrl, _ := url.Parse(sitemapURL)
 		if siteUrl.Scheme == "" {
 			siteUrl.Scheme = "https"
 		}
