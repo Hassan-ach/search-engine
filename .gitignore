@@ -21,6 +21,7 @@ coverage/
 
 # === Python ===
 venv/
+__pycache__/
 
 # === Common ===
 .DS_Store
