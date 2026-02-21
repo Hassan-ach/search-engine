@@ -6,7 +6,7 @@ def idf():
         with conn.cursor() as cursor:
             cursor.execute("""
                 UPDATE words
-                SET idf = (1 + LOG((SELECT COUNT(*) FROM pages)) * 1.0 / sub.df)
+                SET idf = LOG((SELECT COUNT(*) FROM pages) / (1 + sub.df))
                 FROM (
                     SELECT word_id, COUNT(DISTINCT page_id) AS df 
                     FROM page_word 
