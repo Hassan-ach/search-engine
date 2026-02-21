@@ -49,13 +49,13 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 
 	// create Host object
 	host = &entity.Host{
-		MaxRetry:       5,
-		Delay:          delay,
-		MaxPages:       10,
-		PagesCrawled:   0,
-		Name:           u.Host,
-		AllowedUrls:    allowed,
-		NotAllwedPaths: disallow,
+		MaxRetry:        5,
+		Delay:           delay,
+		MaxPages:        10,
+		PagesCrawled:    0,
+		Name:            u.Host,
+		AllowedUrls:     allowed,
+		NotAllowedPaths: disallow,
 	}
 
 	// persist in store

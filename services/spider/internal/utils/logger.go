@@ -82,7 +82,7 @@ type MultiHandler struct {
 func NewMultiLogger(fileName string) *Logger {
 	txtHandler := &SimpleTextHandler{}
 
-	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	file, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		log.Fatalf("failed to open log file: %v", err)
 	}
@@ -134,7 +134,7 @@ type Logger struct {
 }
 
 func (l *Logger) Network() *slog.Logger {
-	return l.With("Context", "Netwok")
+	return l.With("Context", "Network")
 }
 
 func (l *Logger) DB() *slog.Logger {

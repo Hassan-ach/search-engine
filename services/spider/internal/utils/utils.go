@@ -35,7 +35,7 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 	req.Header.Set("Accept", "text/html")
 	req.Header.Set("Accept-Language", "en-US")
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 30 * time.Second}
 	var res *http.Response
 	for attempt := range maxRetry {
 		if attempt > 0 {
