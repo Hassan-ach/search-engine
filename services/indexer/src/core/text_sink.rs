@@ -45,7 +45,7 @@ impl TreeSink for TextSink {
         for text in self.texts.into_inner() {
             for word in text.to_lowercase().split_whitespace().filter_map(|w| {
                 let trimed_word = w.trim_matches(|c: char| {
-                    c.is_whitespace() || matches!(c, '.' | ',' | ':' | '/' | ';' | '"')
+                    c.is_whitespace() || matches!(c, '.' | ',' | ':' | '/' | ';' | '"' | '\'')
                 });
                 if trimed_word.is_empty() || trimed_word.parse::<u32>().is_ok() {
                     return None;
