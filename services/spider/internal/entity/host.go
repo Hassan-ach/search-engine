@@ -3,13 +3,13 @@ package entity
 import "fmt"
 
 type Host struct {
-	MaxRetry       int      // Maximum retries per URL
-	MaxPages       int      // Maximum pages to crawl for this host
-	PagesCrawled   int      // Pages already crawled
-	Delay          int      // Delay between requests in seconds
-	Name           string   // Hostname
-	AllowedUrls    []string // URL patterns allowed to crawl
-	NotAllwedPaths []string // Paths disallowed to crawl (typo kept for backward compatibility)
+	MaxRetry        int      // Maximum retries per URL
+	MaxPages        int      // Maximum pages to crawl for this host
+	PagesCrawled    int      // Pages already crawled
+	Delay           int      // Delay between requests in seconds
+	Name            string   // Hostname
+	AllowedUrls     []string // URL patterns allowed to crawl
+	NotAllowedPaths []string // Paths disallowed to crawl (typo kept for backward compatibility)
 }
 
 // String returns a human-readable summary of the host configuration.
@@ -29,6 +29,6 @@ func (h *Host) String() string {
 		h.PagesCrawled,
 		h.Delay,
 		h.AllowedUrls,
-		h.NotAllwedPaths,
+		h.NotAllowedPaths,
 	)
 }

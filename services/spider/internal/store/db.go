@@ -53,7 +53,7 @@ func Page(page entity.Page) error {
 	defer tx.Rollback()
 
 	var url_id string
-	err = DB.QueryRow(
+	err = tx.QueryRow(
 		`INSERT INTO urls(url) VALUES ($1) 
 				ON CONFLICT (url) DO UPDATE SET url = urls.url
 				RETURNING id`,

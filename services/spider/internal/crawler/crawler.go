@@ -80,7 +80,7 @@ func crawl() {
 		return
 	}
 
-	normUrls := normalizeLinks(page.Links.GetAll(), host.NotAllwedPaths)
+	normUrls := normalizeLinks(page.Links.GetAll(), host.NotAllowedPaths)
 	page.Links = normUrls
 
 	host.PagesCrawled++
