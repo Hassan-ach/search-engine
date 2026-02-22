@@ -6,6 +6,7 @@ import (
 	"encoding/gob"
 	"fmt"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -15,17 +16,24 @@ import (
 	"spider/internal/utils"
 )
 
+type RedisClient struct {
+	conn     *redis.Client
+	ctx      context.Context
+	delay    int
+	maxRetry int
+}
+
 // NewCacheClient initializes and returns a Redis client.
 // Registers entity.Host type with gob for serialization.
-func NewCacheClient() *redis.Client {
+func NewRedisClient(ctx context.Context, conf *config.RedisConfig) *RedisClient {
+	port := strconv.Itoa(conf.Port)
 	client := redis.NewClient(&redis.Options{
-		Addr:     config.RdAddr,
-		Password: config.RdPassword,
-		DB:       config.RdDb,
+		Addr:     conf.Addr + ":" + port,
+		Password: conf.Password,
+		DB:       conf.DB,
 		Protocol: 2,
 	})
 
-	// Ping to ensure Redis connection is alive
 	_, err := client.Ping(context.Background()).Result()
 	if err != nil {
 		log.Fatalf("Failed to connected to redis ERROR: %v", err)
@@ -34,12 +42,17 @@ func NewCacheClient() *redis.Client {
 	// Required for gob encoding/decoding of Host structs
 	gob.Register(entity.Host{})
 	fmt.Println("Cache Connected")
-	return client
+	return &RedisClient{
+		conn:     client,
+		ctx:      ctx,
+		delay:    conf.Delay,
+		maxRetry: conf.MaxRetry,
+	}
 }
 
 // AddHostMetaData serializes a Host struct with gob and stores it in Redis.
 // Logs warnings for invalid input and errors for encoding/storage failures.
-func AddHostMetaData(h string, host *entity.Host) error {
+func (c *RedisClient) AddHostMetaData(h string, host *entity.Host) error {
 	if h == "" || host == nil {
 		return nil
 	}
@@ -50,7 +63,7 @@ func AddHostMetaData(h string, host *entity.Host) error {
 		return fmt.Errorf("encode metadata: %w", err)
 	}
 
-	err := Cache.HSet(ctx, "hosts", h, buf.Bytes()).Err()
+	err := c.conn.HSet(c.ctx, "hosts", h, buf.Bytes()).Err()
 	if err != nil {
 		utils.Log.Cache().Debug("store host metadata", "host", h, "error", err)
 		return fmt.Errorf("store metadata: %w", err)
@@ -61,8 +74,8 @@ func AddHostMetaData(h string, host *entity.Host) error {
 
 // GetHostMetaData retrieves and decodes a Host struct from Redis.
 // Logs each step: retrieval, missing host, decode error, successful fetch.
-func GetHostMetaData(h string) (*entity.Host, bool, error) {
-	val, err := Cache.HGet(ctx, "hosts", h).Bytes()
+func (c *RedisClient) GetHostMetaData(h string) (*entity.Host, bool, error) {
+	val, err := c.conn.HGet(c.ctx, "hosts", h).Bytes()
 	if err == redis.Nil {
 		utils.Log.Cache().Debug("host metadata not found", "host", h)
 		return nil, false, fmt.Errorf("host metadata not found for host: %s", h)
@@ -85,7 +98,7 @@ func GetHostMetaData(h string) (*entity.Host, bool, error) {
 // GetUrl retrieves a URL from Redis atomically.
 // Skips URLs if host is recently visited or URL is already visited.
 // Uses Lua script to ensure atomicity.
-func GetUrl() (string, bool, error) {
+func (c *RedisClient) GetUrl() (string, bool, error) {
 	script := redis.NewScript(`
 	local res = redis.call("zpopmax", KEYS[1])
 	if not res[1] then
@@ -107,9 +120,8 @@ func GetUrl() (string, bool, error) {
 	return url
 	`)
 
-	const maxRetry = 100
-	for range maxRetry {
-		val, err := script.Run(ctx, Cache, []string{"urls", "visitedUrls"}).Result()
+	for range c.maxRetry {
+		val, err := script.Run(c.ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
 		if err != nil {
 			continue
 		}
@@ -118,27 +130,27 @@ func GetUrl() (string, bool, error) {
 			return valStr, true, nil
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Duration(c.delay) * time.Millisecond)
 	}
 	utils.Log.Cache().Debug("failed to get valid URL after retries")
-	return "", false, fmt.Errorf("no valid URL after %d retries", maxRetry)
+	return "", false, fmt.Errorf("no valid URL after %d retries", c.maxRetry)
 }
 
 // AddUrls adds multiple URLs to Redis set.
 // Logs warnings for empty input and errors for failed Redis operations.
-func AddUrls(urls []string) error {
+func (c *RedisClient) AddUrls(urls []string) error {
 	if len(urls) == 0 {
 		utils.Log.Cache().Debug("empty URL list passed to AddUrls")
 		return nil
 	}
 
-	pipe := Cache.Pipeline()
+	pipe := c.conn.Pipeline()
 
 	for _, url := range urls {
-		pipe.ZIncrBy(ctx, "urls", 1, url)
+		pipe.ZIncrBy(c.ctx, "urls", 1, url)
 	}
 
-	_, err := pipe.Exec(ctx)
+	_, err := pipe.Exec(c.ctx)
 	if err != nil {
 		utils.Log.Cache().Debug("add URLs", "error", err)
 		return fmt.Errorf("add URLs: %w", err)
@@ -149,13 +161,13 @@ func AddUrls(urls []string) error {
 
 // AddToVisitedUrl adds a URL to the visitedUrls set.
 // Logs warnings for empty input and errors if Redis fails.
-func AddToVisitedUrl(u string) error {
+func (c *RedisClient) AddToVisitedUrl(u string) error {
 	if u == "" {
 		utils.Log.Cache().Debug("empty URL passed to AddToVisitedUrl")
 		return nil
 	}
 
-	err := Cache.SAdd(ctx, "visitedUrls", u).Err()
+	err := c.conn.SAdd(c.ctx, "visitedUrls", u).Err()
 	if err != nil {
 		utils.Log.Cache().Debug("add to visited URLs", "url", u, "error", err)
 		return fmt.Errorf("add to visited URLs: %w", err)
@@ -166,13 +178,13 @@ func AddToVisitedUrl(u string) error {
 
 // AddToWaitedHost adds a host key in Redis with a TTL corresponding to delay.
 // Logs warnings for empty input and errors for Redis failures.
-func AddToWaitedHost(h string, delay int) {
+func (c *RedisClient) AddToWaitedHost(h string, delay int) {
 	if h == "" {
 		utils.Log.Cache().Debug("empty host passed to AddToWaitedHost")
 		return
 	}
 
-	err := Cache.Set(ctx, h, 1, time.Duration(delay)*time.Second).Err()
+	err := c.conn.Set(c.ctx, h, 1, time.Duration(delay)*time.Second).Err()
 	if err != nil {
 		utils.Log.Cache().Debug("add to waited host", "host", h, "error", err)
 		return
