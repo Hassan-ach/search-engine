@@ -2,31 +2,67 @@ package parser
 
 import (
 	"fmt"
+	"net/http"
 	"net/url"
 	"strconv"
 	"strings"
 
-	"spider/internal/entity"
-	"spider/internal/store"
 	"spider/internal/utils"
 )
 
-// NewHostMetaDta creates a new Host metadata object for the given raw URL.
-// It fetches the site's robots.txt, extracts allowed/disallowed paths, crawl delay,
-// and sitemaps. It persists the Host object in the store and returns it.
-// Logs the full process including execution time and success/failure.
-func NewHostMetaDta(raw string) (host *entity.Host, err error) {
-	fmt.Printf("Attempting to create new Host Meta Data Object. host: %s\n", raw)
+type Robots struct {
+	Allow      []string
+	Disallow   []string
+	SiteMaps   []string
+	CrawlDelay int
+}
 
-	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
-		raw = "https://" + raw
+func parseRobots(txt, ua string) *Robots {
+	r := &Robots{
+		CrawlDelay: 5,
 	}
 
-	u, err := url.Parse(strings.TrimPrefix(raw, "www."))
-	if err != nil {
-		return
+	if ua == "" {
+		ua = "*"
 	}
 
+	var uaActive bool
+	for _, line := range strings.Split(txt, "\n") {
+
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		lower := strings.ToLower(line)
+
+		switch {
+		case strings.HasPrefix(lower, "user-agent:"):
+			userAgent := strings.TrimSpace(line[11:])
+			uaActive = (userAgent == ua || userAgent == "*")
+		case uaActive:
+			switch {
+			case strings.HasPrefix(lower, "disallow:"):
+				rule := strings.TrimSpace(line[9:])
+				r.Disallow = append(r.Disallow, rule)
+			case strings.HasPrefix(lower, "allow:"):
+				rule := strings.TrimSpace(line[6:])
+				r.Allow = append(r.Allow, rule)
+			case strings.HasPrefix(lower, "crawl-delay:"):
+				if d, err := strconv.Atoi(strings.TrimSpace(line[12:])); err == nil && d > 0 {
+					r.CrawlDelay = d
+				}
+			}
+
+		case strings.HasPrefix(lower, "sitemap:"):
+			sitemapURL := strings.TrimSpace(line[len("Sitemap:"):])
+			r.SiteMaps = append(r.SiteMaps, sitemapURL)
+		}
+	}
+	return r
+}
+
+func NewRobots(client *http.Client, u *url.URL) (*Robots, error) {
 	h := strings.TrimPrefix(u.Host, "www.")
 
 	u.Scheme = "https"
@@ -35,147 +71,16 @@ func NewHostMetaDta(raw string) (host *entity.Host, err error) {
 	u.Fragment = ""
 	u.Path = "/robots.txt"
 
-	// fetch robots.txt
 	robotsURL := u.String()
+
+	// fetch robots.txt
 	var body []byte
-	body, _, err = utils.GetReq(robotsURL, 3, 5)
+	body, _, err := utils.GetReq(client, robotsURL, 3, 5)
 	if err != nil {
 		return nil, fmt.Errorf("get robots.txt: %w", err)
 	}
 
 	// parse robots.txt for rules and sitemaps
-	allowed, disallow, delay, sitemapsURLs := parseRobots(string(body), "*")
-	sitemaps := sitemapsProcess(sitemapsURLs, u.Host)
-
-	// create Host object
-	host = &entity.Host{
-		MaxRetry:        5,
-		Delay:           delay,
-		MaxPages:        10,
-		PagesCrawled:    0,
-		Name:            u.Host,
-		AllowedUrls:     allowed,
-		NotAllowedPaths: disallow,
-	}
-
-	// persist in store
-	store.AddHostMetaData(host.Name, host)
-	store.AddUrls(sitemaps)
-
-	return host, nil
-}
-
-// parseRobots reads the robots.txt file content for a given user-agent.
-// Returns lists of allowed URLs, disallowed paths, crawl delay, and sitemap URLs.
-// Logs start, end, and details about each rule parsed.
-func parseRobots(file, userAgent string) (allow, disallow []string, delay int, sitemaps []string) {
-	fmt.Println("Starting robots.txt parsing")
-
-	if userAgent == "" {
-		userAgent = "*"
-	}
-
-	log := utils.Log.Parsing().With("operation", "parseRobots", "userAgent", userAgent)
-
-	lines := strings.Split(file, "\n")
-	var activeAgent bool
-
-	for _, raw := range lines {
-		line := strings.TrimSpace(raw)
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		lower := strings.ToLower(line)
-
-		switch {
-		case strings.HasPrefix(lower, "user-agent:"):
-			ua := strings.TrimSpace(line[len("User-agent:"):])
-			activeAgent = (ua == userAgent || ua == "*")
-
-			log.Debug(
-				"Processing User-agent",
-				"line",
-				line,
-				"isActive",
-				activeAgent,
-			)
-
-		case strings.HasPrefix(lower, "disallow:") && activeAgent:
-			rule := strings.TrimSpace(line[len("Disallow:"):])
-			disallow = append(disallow, rule)
-			log.Debug("Found Disallow rule", "rule", rule)
-
-		case strings.HasPrefix(lower, "allow:") && activeAgent:
-			rule := strings.TrimSpace(line[len("Allow:"):])
-			allow = append(allow, rule)
-			log.Debug("Found Allow rule", "rule", rule)
-
-		case strings.HasPrefix(lower, "crawl-delay:") && activeAgent:
-			delayStr := strings.TrimSpace(line[len("Crawl-delay:"):])
-			if d, err := strconv.Atoi(delayStr); err == nil {
-				delay = d
-				log.Debug("Found Crawl-delay", "delay", d)
-			}
-		case strings.HasPrefix(lower, "sitemap:"):
-			sitemapURL := strings.TrimSpace(line[len("Sitemap:"):])
-			sitemaps = append(sitemaps, sitemapURL)
-			log.Debug("Found Sitemap", "url", sitemapURL)
-		}
-	}
-
-	if delay == 0 {
-		delay = 5
-		log.Debug("No Crawl-delay found for active agent, applying default", "defaultDelay", delay)
-
-	}
-
-	return
-}
-
-// sitemapsProcess fetches and parses sitemap URLs for a host.
-// Returns a flattened list of normalized URLs found across all sitemaps.
-// Logs start, end, execution time, number of extracted links, failed sitemaps.
-func sitemapsProcess(s []string, host string) []string {
-	log := utils.Log.General().With("operation", "sitemapsProcess", "host", host)
-	fmt.Println("Starting sitemap processing")
-
-	var r []string
-	failedSites := 0
-
-	for _, sitemapURL := range s {
-		siteUrl, _ := url.Parse(sitemapURL)
-		if siteUrl.Scheme == "" {
-			siteUrl.Scheme = "https"
-		}
-		if siteUrl.Host == "" {
-			siteUrl.Host = host
-		}
-
-		file, _, err := utils.GetReq(siteUrl.String(), 1, 5)
-		if err != nil {
-			failedSites++
-			utils.Log.Network().
-				Debug("Failed to fetch sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
-			continue
-		}
-
-		d, err := siteMap(file)
-		if err != nil {
-			failedSites++
-			utils.Log.Parsing().
-				Debug("Failed to parse sitemap", "url", sitemapURL, "error", err, "operation", "sitemapsProcess")
-			continue
-		}
-
-		for _, u := range d {
-			x, ok := utils.NormalizeUrl(u, host)
-			if !ok {
-				log.Debug("URL normalization failed", "rawURL", u, "host", host)
-				continue
-			}
-			r = append(r, x)
-		}
-
-	}
-	return r
+	r := parseRobots(string(body), "*")
+	return r, nil
 }

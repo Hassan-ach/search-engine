@@ -92,6 +92,10 @@ func NewMultiLogger(fileName string) *Logger {
 	return &Logger{logger, file}
 }
 
+func (l *Logger) Close() {
+	l.file.Close()
+}
+
 func (m MultiHandler) Enabled(ctx context.Context, l slog.Level) bool {
 	//
 	for _, h := range m.handlers {
@@ -133,26 +137,14 @@ type Logger struct {
 	file *os.File
 }
 
-func (l *Logger) Network() *slog.Logger {
-	return l.With("Context", "Network")
+func (l *Logger) Store() *slog.Logger {
+	return l.With("Context", "Store")
 }
 
-func (l *Logger) DB() *slog.Logger {
-	return l.With("Context", "DB")
-}
-
-func (l *Logger) Cache() *slog.Logger {
-	return l.With("Context", "Cache")
-}
-
-func (l *Logger) Parsing() *slog.Logger {
-	return l.With("Context", "Parsing")
+func (l *Logger) Parser() *slog.Logger {
+	return l.With("Context", "Parser")
 }
 
 func (l *Logger) General() *slog.Logger {
 	return l.With("Context", "General")
-}
-
-func (l *Logger) Close() {
-	l.file.Close()
 }

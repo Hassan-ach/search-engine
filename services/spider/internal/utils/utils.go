@@ -10,20 +10,11 @@ import (
 	"time"
 )
 
-func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err error) {
-	// start := time.Now()
-	log := Log.Network().With("url", url, "operation", "GetReq")
-
-	// defer func() {
-	// 	log.Debug(
-	// 		"Request completed",
-	// 		"statusCode",
-	// 		statusCode,
-	// 		"duration",
-	// 		time.Since(start),
-	// 	)
-	// }()
-
+func GetReq(
+	client *http.Client,
+	url string,
+	maxRetry, delay int,
+) (body []byte, statusCode int, err error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("request initialization failed: %w", err)
@@ -35,11 +26,9 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 	req.Header.Set("Accept", "text/html")
 	req.Header.Set("Accept-Language", "en-US")
 
-	client := &http.Client{Timeout: 30 * time.Second}
 	var res *http.Response
 	for attempt := range maxRetry {
 		if attempt > 0 {
-			log.Debug("Retrying request", "attempt", attempt+1)
 			time.Sleep(time.Second * time.Duration(delay))
 		}
 
@@ -50,11 +39,11 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 
 		statusCode = res.StatusCode
 		if statusCode >= 500 || statusCode == 429 {
-			log.Debug("Server error, retrying", "statusCode", statusCode)
 			res.Body.Close()
 			continue
 		}
 
+		// TODO: i need to add a size limit here
 		body, err = io.ReadAll(res.Body)
 		res.Body.Close()
 		if err != nil {
@@ -71,7 +60,7 @@ func GetReq(url string, maxRetry, delay int) (body []byte, statusCode int, err e
 
 // NormalizeUrl canonicalizes a URL: normalizes scheme/host/query/path, filters disallowed paths/queries/extensions.
 // Returns (normalized string, true) if valid for crawling; ("", false) if skipped or invalid.
-func NormalizeUrl(raw, baseHost string) (string, bool) {
+func NormalizeUrl(raw string, u *url.URL) (string, bool) {
 	disallowPaths := []string{
 		"/login", "/logout", "/register", "/signup", "/password-reset",
 		"/account/", "/cart", "/checkout", "/order/", "/payment/",
@@ -90,10 +79,6 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 		".css", ".js", ".ico",
 	}
 	if raw == "" || strings.HasPrefix(raw, "#") {
-		return "", false
-	}
-	u, err := url.Parse(raw)
-	if err != nil {
 		return "", false
 	}
 
@@ -117,10 +102,6 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 	}
 
 	u.Scheme = "https"
-	baseHost = strings.ToLower(strings.TrimPrefix(baseHost, "www."))
-	if u.Host == "" && baseHost != "" {
-		u.Host = baseHost
-	}
 	if u.Host == "" {
 		return "", false
 	}
@@ -147,4 +128,14 @@ func NormalizeUrl(raw, baseHost string) (string, bool) {
 	}
 
 	return u.String(), true
+}
+
+func NormalizeUrls(raws []string, baseHost *url.URL) []string {
+	var res []string
+	for _, raw := range raws {
+		if norm, ok := NormalizeUrl(raw, baseHost); ok {
+			res = append(res, norm)
+		}
+	}
+	return res
 }

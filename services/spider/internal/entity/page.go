@@ -4,16 +4,14 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"spider/internal/utils"
 )
 
 type Page struct {
 	MetaData          // embeds MetaData
 	StatusCode int    // HTTP response code
 	HTML       []byte // Raw HTML content
-	Images     *utils.Set[string]
-	Links      *utils.Set[string]
+	Images     []string
+	Links      []string
 }
 
 // String prints a detailed, human-readable summary of the Page content.
@@ -40,7 +38,7 @@ func (p *Page) String() {
 
 	fmt.Println("----- Links -----")
 	if p.Links != nil {
-		for _, l := range p.Links.GetAll() {
+		for _, l := range p.Links {
 			fmt.Printf("  - %s\n", l)
 		}
 	} else {
@@ -49,7 +47,7 @@ func (p *Page) String() {
 
 	fmt.Println("----- Images -----")
 	if p.Images != nil {
-		for _, img := range p.Images.GetAll() {
+		for _, img := range p.Images {
 			fmt.Printf("  - %s\n", img)
 		}
 	} else {

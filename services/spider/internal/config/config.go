@@ -2,66 +2,142 @@ package config
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/joho/godotenv"
 )
 
-var (
-	PgHost     string
-	PgPort     int
-	PgUser     string
-	PgPassword string
-	PgDbname   string
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+	Port     int
+	Delay    int
+	MaxRetry int
+}
 
-	RdAddr     string
-	RdPassword string
-	RdDb       int
-	RdPort     int
+type PSQLConfig struct {
+	Host            string
+	Port            int
+	User            string
+	DBname          string
+	Password        string
+	MaxOpenConns    int
+	MaxIdleConns    int
+	MaxConnLifetime time.Duration
+}
 
-	MaxGoRoutines int
-)
+type StoreConfig struct {
+	Cache RedisConfig
+	DB    PSQLConfig
+}
 
-func init() {
+type AppConfig struct {
+	MaxWorkers         int
+	MaxConcurrentFetch int
+	LogsPath           string
+	ClawlerDelay       int
+	Timeout            time.Duration
+}
+
+type Config struct {
+	App   AppConfig
+	Store StoreConfig
+}
+
+func LoadConfig(envPath string) (*Config, error) {
 	err := godotenv.Load("../../.env")
 	if err != nil {
-		log.Fatal("Error loading .env file")
-	}
-	PgHost = os.Getenv("PG_HOST")
-	PgPort, err = strconv.Atoi(os.Getenv("PG_PORT"))
-	if err != nil {
-		PgPort = 5432
-	}
-	PgUser = os.Getenv("PG_USER")
-	PgPassword = os.Getenv("PG_PASSWORD")
-	PgDbname = os.Getenv("PG_DBNAME")
-	MaxGoRoutines, err = strconv.Atoi(os.Getenv("MAX_GO_ROUTINES"))
-	if err != nil {
-		MaxGoRoutines = 10
+		panic("Failed to load .env file")
 	}
 
-	RdAddr = os.Getenv("REDIS_ADDR")
-	RdPassword = os.Getenv("REDIS_PASSWORD")
-	RdDb, err = strconv.Atoi(os.Getenv("REDIS_DB"))
-	if err != nil {
-		RdDb = 1
+	c := &Config{
+		App:   loadAppConfig(),
+		Store: loadStoreConfig(),
 	}
-	RdPort, err = strconv.Atoi(os.Getenv("REDIS_PORT"))
-	if err != nil {
-		RdPort = 6379
+
+	fmt.Printf("%+v\n", c)
+
+	return c, nil
+}
+
+func loadStoreConfig() StoreConfig {
+	return StoreConfig{
+		Cache: loadRedisConfig(),
+		DB:    loadDatabaseConfig(),
 	}
-	fmt.Println("=== Environment Variables ===")
-	fmt.Printf("REDIS_ADDR: %s\n", os.Getenv("REDIS_ADDR"))
-	fmt.Printf("REDIS_PASSWORD: %s\n", os.Getenv("REDIS_PASSWORD"))
-	fmt.Printf("REDIS_DB: %s\n", os.Getenv("REDIS_DB"))
-	fmt.Printf("REDIS_PORT: %s\n", os.Getenv("REDIS_PORT"))
-	fmt.Printf("PG_HOST: %s\n", os.Getenv("PG_HOST"))
-	fmt.Printf("PG_PORT: %s\n", os.Getenv("PG_PORT"))
-	fmt.Printf("PG_USER: %s\n", os.Getenv("PG_USER"))
-	fmt.Printf("PG_PASSWORD: %s\n", os.Getenv("PG_PASSWORD"))
-	fmt.Printf("PG_DBNAME: %s\n", os.Getenv("PG_DBNAME"))
-	fmt.Printf("MAX_GO_ROUTINES: %s\n", os.Getenv("MAX_GO_ROUTINES"))
-	fmt.Println("=============================")
+}
+
+func loadDatabaseConfig() PSQLConfig {
+	host := getWithDefault("PG_HOST", "localhost")
+	port := getIntWithDefault("PG_PORT", 5432)
+	user := getWithDefault("PG_USER", "admin")
+	password := getWithDefault("PG_PASSWORD", "1234")
+	dbname := getWithDefault("PG_DBNAME", "se")
+	maxOpenConns := getIntWithDefault("PG_MAX_OPEN_CONNS", 20)
+	maxIdleConns := getIntWithDefault("PG_MAX_IDLE_CONNS", 20)
+	maxConnLifetime := getIntWithDefault("PG_MAX_CONN_LIFETIME", 0)
+
+	return PSQLConfig{
+		Host:            host,
+		Port:            port,
+		User:            user,
+		DBname:          dbname,
+		Password:        password,
+		MaxOpenConns:    maxOpenConns,
+		MaxIdleConns:    maxIdleConns,
+		MaxConnLifetime: time.Second * time.Duration(maxConnLifetime),
+	}
+}
+
+func loadRedisConfig() RedisConfig {
+	addr := getWithDefault("REDIS_ADDR", "localhost")
+	password := getWithDefault("REDIS_PASSWORD", "")
+	db := getIntWithDefault("REDIS_DB", 1)
+	port := getIntWithDefault("REDIS_PORT", 6379)
+	delay := getIntWithDefault("REDIS_DELAY", 5)
+	maxRetry := getIntWithDefault("REDIS_MAX_RETRY", 10)
+
+	return RedisConfig{
+		Addr:     addr,
+		Password: password,
+		Port:     port,
+		DB:       db,
+		Delay:    delay,
+		MaxRetry: maxRetry,
+	}
+}
+
+func loadAppConfig() AppConfig {
+	maxWorkers := getIntWithDefault("MAX_WORKERS", 10)
+	timeout := getIntWithDefault("TIMEOUT", 30)
+	maxConcurrentFetch := getIntWithDefault("MAX_CONCURRENT_FETCH", 100)
+	logsPath := getWithDefault("LOGS_PATH", "./logs")
+	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 100)
+	return AppConfig{
+		MaxWorkers:         maxWorkers,
+		Timeout:            time.Second * time.Duration(timeout),
+		MaxConcurrentFetch: maxConcurrentFetch,
+		LogsPath:           logsPath,
+		ClawlerDelay:       clawlerDelay,
+	}
+}
+
+func getWithDefault(key, defaultValue string) string {
+	k := os.Getenv(key)
+	if k == "" {
+		return defaultValue
+	}
+	return k
+}
+
+func getIntWithDefault(key string, defaultValue int) int {
+	k := getWithDefault(key, "")
+	v, err := strconv.Atoi(k)
+	if err != nil {
+		return defaultValue
+	}
+	return v
 }
