@@ -5,16 +5,18 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"time"
+	"unicode/utf8"
 )
 
 func GetReq(
 	client *http.Client,
 	url string,
 	maxRetry, delay int,
-) (body []byte, statusCode int, err error) {
+) ([]byte, int, error) {
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return nil, 0, fmt.Errorf("request initialization failed: %w", err)
@@ -37,14 +39,16 @@ func GetReq(
 			continue
 		}
 
-		statusCode = res.StatusCode
+		statusCode := res.StatusCode
 		if statusCode >= 500 || statusCode == 429 {
 			res.Body.Close()
 			continue
 		}
+		if statusCode >= 400 {
+			return nil, statusCode, fmt.Errorf("client error: %d", statusCode)
+		}
 
-		// TODO: i need to add a size limit here
-		body, err = io.ReadAll(res.Body)
+		body, err := io.ReadAll(io.LimitReader(res.Body, 10<<20)) // 10 MB
 		res.Body.Close()
 		if err != nil {
 			err = fmt.Errorf("failed to read response: %w", err)
@@ -52,25 +56,25 @@ func GetReq(
 		}
 
 		err = nil
-		return
+		return body, statusCode, nil
 	}
 
 	return nil, 0, fmt.Errorf("all %d retries failed: %w", maxRetry, err)
 }
 
-// NormalizeUrl canonicalizes a URL: normalizes scheme/host/query/path, filters disallowed paths/queries/extensions.
-// Returns (normalized string, true) if valid for crawling; ("", false) if skipped or invalid.
-func NormalizeUrl(raw string, u *url.URL) (string, bool) {
-	disallowPaths := []string{
+var (
+	disallowPathPrefixes = []string{
 		"/login", "/logout", "/register", "/signup", "/password-reset",
 		"/account/", "/cart", "/checkout", "/order/", "/payment/",
 		"/search", "/filter/", "/admin/", "/dashboard/", "/settings/",
 		"/404", "/error/", "/maintenance", "/test/", "/print/", "/preview/", "/tag/",
 	}
-	disallowQueries := []string{
+
+	disallowQueryParams = []string{
 		"sort", "page", "filter", "q", "search",
 	}
-	skipExtensions := []string{
+
+	skipFileExtensions = []string{
 		".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx",
 		".zip", ".rar", ".7z", ".tar", ".gz", ".exe", ".msi", ".dmg", ".apk",
 		".jpg", ".jpeg", ".png", ".gif", ".bmp", ".tiff", ".webp", ".svg",
@@ -78,37 +82,100 @@ func NormalizeUrl(raw string, u *url.URL) (string, bool) {
 		".mp4", ".avi", ".mov", ".wmv", ".mkv", ".flv", ".webm",
 		".css", ".js", ".ico",
 	}
+
+	// Wiki-specific: blocks /Template:Foo/xx/, /Help:Bar/en/, etc.
+	wikiLangSubpageRE   = regexp.MustCompile(`(?i)/[a-z]{2,3}(-[a-z]{2,4})?/?$`)
+	wikiNoisyNamespaces = []string{"/Template:", "/Help:", "/Manual:", "/Extension:"}
+)
+
+func NormalizeUrl(raw string, baseHost string) (string, bool) {
+	raw = sanitizeUTF8(raw)
 	if raw == "" || strings.HasPrefix(raw, "#") {
 		return "", false
 	}
 
-	pathLower := strings.ToLower(u.Path)
-	for _, ext := range skipExtensions {
-		if strings.HasSuffix(pathLower, ext) {
-			return "", false
-		}
-	}
-
-	for _, dis := range disallowPaths {
-		if u.Path == dis || strings.HasPrefix(u.Path, dis) {
-			return "", false
-		}
-	}
-
-	for _, param := range disallowQueries {
-		if _, ok := u.Query()[param]; ok {
-			return "", false
-		}
-	}
-
-	u.Scheme = "https"
-	if u.Host == "" {
+	u, err := url.Parse(raw)
+	if err != nil {
 		return "", false
 	}
-	u.Host = strings.TrimPrefix(u.Host, "www.")
-	u.Scheme = strings.ToLower(u.Scheme)
-	u.Host = strings.ToLower(u.Host)
+
+	if shouldSkipByPath(u.Path) {
+		return "", false
+	}
+
+	if shouldSkipByExtension(u.Path) {
+		return "", false
+	}
+
+	if shouldSkipByQuery(u.Query()) {
+		return "", false
+	}
+
+	if shouldSkipWikiLanguageSubpage(u.Path) {
+		return "", false
+	}
+
+	normalizeURLParts(u, baseHost)
+
+	return u.String(), true
+}
+
+func shouldSkipByPath(path string) bool {
+	for _, prefix := range disallowPathPrefixes {
+		if path == prefix || strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldSkipByExtension(path string) bool {
+	pathLower := strings.ToLower(path)
+	for _, ext := range skipFileExtensions {
+		if strings.HasSuffix(pathLower, ext) {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldSkipByQuery(q url.Values) bool {
+	for _, param := range disallowQueryParams {
+		if _, exists := q[param]; exists {
+			return true
+		}
+	}
+	return false
+}
+
+func shouldSkipWikiLanguageSubpage(path string) bool {
+	if !wikiLangSubpageRE.MatchString(path) {
+		return false
+	}
+	for _, ns := range wikiNoisyNamespaces {
+		if strings.Contains(path, ns) {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeURLParts(u *url.URL, baseHost string) {
+	// Force HTTPS
+	u.Scheme = "https"
+
+	// Fill host if relative URL
+	if u.Host == "" && baseHost != "" {
+		u.Host = baseHost
+	}
+
+	// Clean host
+	u.Host = strings.TrimPrefix(strings.ToLower(u.Host), "www.")
+
+	// Remove fragment
 	u.Fragment = ""
+
+	// Canonicalize query: sorted keys
 	if u.RawQuery != "" {
 		q := u.Query()
 		keys := make([]string, 0, len(q))
@@ -116,26 +183,48 @@ func NormalizeUrl(raw string, u *url.URL) (string, bool) {
 			keys = append(keys, k)
 		}
 		sort.Strings(keys)
+
 		sorted := url.Values{}
 		for _, k := range keys {
 			sorted[k] = q[k]
 		}
 		u.RawQuery = sorted.Encode()
 	}
-	if len(u.Query()) == 0 && u.Path != "" && !strings.HasSuffix(u.Path, "/") &&
+
+	// Add trailing slash to directory-like paths (no extension, no query)
+	if len(u.Query()) == 0 &&
+		u.Path != "" &&
+		!strings.HasSuffix(u.Path, "/") &&
 		!strings.Contains(u.Path, ".") {
 		u.Path += "/"
 	}
-
-	return u.String(), true
 }
 
-func NormalizeUrls(raws []string, baseHost *url.URL) []string {
-	var res []string
+func NormalizeUrls(raws []string, baseHost string) []string {
+	result := make([]string, 0, len(raws))
 	for _, raw := range raws {
 		if norm, ok := NormalizeUrl(raw, baseHost); ok {
-			res = append(res, norm)
+			result = append(result, norm)
 		}
 	}
-	return res
+	return result
+}
+
+func sanitizeUTF8(s string) string {
+	b := []byte(s)
+	if utf8.Valid(b) {
+		return s
+	}
+
+	var runes []rune
+	for len(b) > 0 {
+		r, size := utf8.DecodeRune(b)
+		if r == utf8.RuneError && size == 1 {
+			b = b[1:] // skip invalid byte
+			continue
+		}
+		runes = append(runes, r)
+		b = b[size:]
+	}
+	return string(runes)
 }

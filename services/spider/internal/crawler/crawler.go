@@ -32,6 +32,8 @@ type Spider struct {
 	logger    *utils.Logger
 }
 
+type Metrics struct{}
+
 func NewSpider(conf *config.Config) *Spider {
 	ctx, cancel := context.WithCancel(context.Background())
 	httpClient := &http.Client{Timeout: 10 * time.Second}
@@ -68,6 +70,7 @@ func (s *Spider) Start(startUrls []string) {
 
 func (s *Spider) Stop() {
 	s.cancel()
+	close(s.fetchpool)
 	s.wg.Wait()
 }
 
@@ -109,6 +112,7 @@ func (s *Spider) crawl() {
 
 	rawUrl, ok, err := s.store.GetNextUrl(ctx)
 	if err != nil || !ok {
+		fmt.Println("No URL fetched from store or error occurred:", err)
 		return
 	}
 	s.logger.Info("Fetched URL from store", "url", rawUrl)

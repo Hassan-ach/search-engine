@@ -164,7 +164,7 @@ func (c *SQLClient) InsertURLs(ctx context.Context, tx *sql.Tx, urls []string) (
 		ins AS (
 		    INSERT INTO urls (url)
 		    SELECT url FROM input
-		    ON CONFLICT (url) DO NOTHING
+			ON CONFLICT (url) DO UPDATE SET url = urls.url
 		    RETURNING id, url
 		)
 		SELECT u.id

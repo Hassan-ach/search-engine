@@ -65,7 +65,7 @@ func fetchSitemap(client *http.Client, sitemapURL string, host *url.URL) ([]stri
 	}
 
 	for _, u := range d.Urls {
-		x, ok := utils.NormalizeUrl(u.Loc, host)
+		x, ok := utils.NormalizeUrl(u.Loc, host.Host)
 		if !ok {
 			return nil, fmt.Errorf("fetching sitemap: invalid URL %s", u.Loc)
 		}
