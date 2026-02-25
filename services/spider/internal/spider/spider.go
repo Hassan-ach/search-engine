@@ -1,4 +1,4 @@
-package crawler
+package spider
 
 import (
 	"bytes"
@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -114,6 +113,7 @@ func (s *Spider) crawl() {
 		fmt.Println("No URL fetched from store or error occurred:", err)
 		return
 	}
+
 	s.logger.Info("Fetched URL from store", "url", rawUrl)
 
 	u, err := url.Parse(rawUrl)
@@ -153,43 +153,11 @@ func (s *Spider) crawl() {
 		len(page.Images),
 	)
 
-	normUrls := normalizeLinks(page.Links, host.NotAllowedPaths)
+	normUrls := utils.ValidateLinks(page.Links, host.NotAllowedPaths)
 	page.Links = normUrls
 
 	host.PagesCrawled++
 	s.store.Persist(ctx, page, host)
-}
-
-func normalizeLinks(links []string, disallowed []string) []string {
-	normUrls := utils.NewSet[string]()
-	for _, x := range links {
-		ur, err := url.Parse(x)
-		if err != nil || isDisallowed(ur.Path, disallowed) {
-			continue
-		}
-		normUrls.Add(ur.String())
-	}
-	return normUrls.GetAll()
-}
-
-func isDisallowed(path string, disallowed []string) bool {
-	for _, d := range disallowed {
-		// detect if pattern looks like regex
-		if strings.ContainsAny(d, `.^$*+?[]|()`) {
-			matched, err := regexp.MatchString(d, path)
-			if err != nil {
-				continue
-			}
-			if matched {
-				return true
-			}
-		} else {
-			if strings.HasPrefix(path, d) {
-				return true
-			}
-		}
-	}
-	return false
 }
 
 func (s *Spider) fetchAndParse(
@@ -232,7 +200,7 @@ func (s *Spider) newHostMetaData(ctx context.Context, raw string) (host *entity.
 		return
 	}
 
-	r, err := parser.NewRobots(s.httpClient, u)
+	r, err := s.newRobots(u)
 
 	sitemaps := parser.FetchSitemaps(s.httpClient, r.SiteMaps, u)
 
@@ -265,4 +233,27 @@ func (s *Spider) newHostMetaData(ctx context.Context, raw string) (host *entity.
 	cache.AddUrls(ctx, sitemaps)
 
 	return host, nil
+}
+
+func (s *Spider) newRobots(u *url.URL) (*entity.Robots, error) {
+	h := strings.TrimPrefix(u.Host, "www.")
+
+	u.Scheme = "https"
+	u.Host = h
+	u.RawQuery = ""
+	u.Fragment = ""
+	u.Path = "/robots.txt"
+
+	robotsURL := u.String()
+
+	// fetch robots.txt
+	var body []byte
+	body, _, err := utils.GetReq(s.httpClient, robotsURL, 3, 5)
+	if err != nil {
+		return nil, fmt.Errorf("get robots.txt: %w", err)
+	}
+
+	// parse robots.txt for rules and sitemaps
+	r := s.parser.ParseRobots(string(body), "*")
+	return r, nil
 }

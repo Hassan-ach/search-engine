@@ -228,3 +228,35 @@ func sanitizeUTF8(s string) string {
 	}
 	return string(runes)
 }
+
+func ValidateLinks(links []string, disallowed []string) []string {
+	normUrls := NewSet[string]()
+	for _, x := range links {
+		ur, err := url.Parse(x)
+		if err != nil || isDisallowed(ur.Path, disallowed) {
+			continue
+		}
+		normUrls.Add(ur.String())
+	}
+	return normUrls.GetAll()
+}
+
+func isDisallowed(path string, disallowed []string) bool {
+	for _, d := range disallowed {
+		// detect if pattern looks like regex
+		if strings.ContainsAny(d, `.^$*+?[]|()`) {
+			matched, err := regexp.MatchString(d, path)
+			if err != nil {
+				continue
+			}
+			if matched {
+				return true
+			}
+		} else {
+			if strings.HasPrefix(path, d) {
+				return true
+			}
+		}
+	}
+	return false
+}
