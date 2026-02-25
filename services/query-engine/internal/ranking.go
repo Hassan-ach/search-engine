@@ -7,7 +7,7 @@ import (
 	"slices"
 )
 
-func tf_idfScore(
+func tfIdf(
 	query []string,
 	data *Data,
 	pageMapper *PageMapper,
@@ -23,17 +23,17 @@ func tf_idfScore(
 			panic(fmt.Sprintf("page with URLID %s not found in page mapper", page.URLID))
 		}
 
-		M[idx] = get_doc_vector(page, wordIdf, wordMapper, len(query))
+		M[idx] = docVector(page, wordIdf, wordMapper, len(query))
 	}
 
-	queryVec := get_query_vector(query, wordIdf, wordMapper)
+	queryVec := queryVector(query, wordIdf, wordMapper)
 	docScores := make(map[*Page]float64, len(pages))
 	for _, page := range pages {
 		idx, ok := pageMapper.GetIndex(page.URLID)
 		if !ok {
 			panic(fmt.Sprintf("page with URLID %s not found in page mapper", page.URLID))
 		}
-		score := cosine_similarity(M[idx], queryVec)
+		score := cosineSimilarity(M[idx], queryVec)
 		docScores[page] = score
 	}
 
@@ -79,12 +79,12 @@ func ranking(conn *sql.DB, query []string) ([]*Page, error) {
 		wordMapper.MapWord(w)
 	}
 
-	pages, err := tf_idfScore(query, data, pageMapper, wordMapper)
+	pages, err := tfIdf(query, data, pageMapper, wordMapper)
 	if err != nil {
 		return nil, fmt.Errorf("failed to rank nodes: %w", err)
 	}
 
-	normalize_tf_idf(pages)
+	normalizeTFIDF(pages)
 
 	rankedPages, err := rank(pages, 0.5, pageMapper, wordMapper)
 	if err != nil {
@@ -94,11 +94,11 @@ func ranking(conn *sql.DB, query []string) ([]*Page, error) {
 	return rankedPages, nil
 }
 
-func cosine_similarity(vecA, vecB []float64) float64 {
-	return dot_product(vecA, vecB) / (magnitude(vecA) * magnitude(vecB))
+func cosineSimilarity(vecA, vecB []float64) float64 {
+	return dotProduct(vecA, vecB) / (magnitude(vecA) * magnitude(vecB))
 }
 
-func dot_product(vecA, vecB []float64) float64 {
+func dotProduct(vecA, vecB []float64) float64 {
 	dot := 0.0
 	for i := range vecA {
 		dot += vecA[i] * vecB[i]
@@ -124,7 +124,7 @@ func magnitude(vec []float64) float64 {
 	return math.Sqrt(sum)
 }
 
-func calculate_query_tf(query []string) map[string]int {
+func tf(query []string) map[string]int {
 	tf := make(map[string]int, len(query))
 
 	for _, word := range query {
@@ -133,7 +133,7 @@ func calculate_query_tf(query []string) map[string]int {
 	return tf
 }
 
-func get_doc_vector(
+func docVector(
 	page *Page,
 	wordIdf map[string]float64,
 	wordMapper *WordMapper,
@@ -152,13 +152,13 @@ func get_doc_vector(
 	return vec
 }
 
-func get_query_vector(
+func queryVector(
 	query []string,
 	wordIdf map[string]float64,
 	wordMapper *WordMapper,
 ) []float64 {
-	queryTF := calculate_query_tf(query)
-	return get_doc_vector(&Page{Words: queryTF}, wordIdf, wordMapper, len(query))
+	queryTF := tf(query)
+	return docVector(&Page{Words: queryTF}, wordIdf, wordMapper, len(query))
 }
 
 func normalizeTFIDF(pages map[*Page]float64) {

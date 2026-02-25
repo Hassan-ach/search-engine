@@ -11,7 +11,7 @@ import (
 	"github.com/lib/pq"
 )
 
-func db_setup() *sql.DB {
+func dbSetup() *sql.DB {
 	port, err := strconv.Atoi(os.Getenv("PG_PORT"))
 	if err != nil {
 		panic("invalid port number")

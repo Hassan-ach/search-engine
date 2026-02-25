@@ -10,7 +10,12 @@ type DBConfig struct {
 	maxIdle  int
 }
 
-type RankingConfig struct {
+type RankerConfig struct {
 	maxResults int
 	weightTF   float64
+}
+
+type Config struct {
+	db     DBConfig
+	ranker RankerConfig
 }

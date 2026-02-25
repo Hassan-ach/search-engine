@@ -6,7 +6,7 @@ import (
 	"github.com/trustmaster/go-aspell"
 )
 
-func get_suggestions(speller *aspell.Speller, q string) []string {
+func getSuggestions(speller *aspell.Speller, q string) []string {
 	if speller.Check(q) {
 		return []string{}
 	}
@@ -19,7 +19,7 @@ func get_words_from_query(speller *aspell.Speller, q string) []string {
 	suggestions := make(map[string]struct{}, len(word_list))
 
 	for _, word := range word_list {
-		sugs := get_suggestions(speller, strings.ToLower(word))
+		sugs := getSuggestions(speller, strings.ToLower(word))
 		for _, w := range sugs {
 			suggestions[strings.ToLower(w)] = struct{}{}
 		}
