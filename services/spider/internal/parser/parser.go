@@ -49,6 +49,7 @@ func (p *Parser) ParseHTML(r io.Reader, baseURL string) (*entity.Page, error) {
 	c.Meta.CrawledAt = time.Now()
 
 	p.log.Info(
+		"",
 		"links_found",
 		len(c.Links),
 		"images_found",

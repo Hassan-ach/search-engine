@@ -19,14 +19,17 @@ type RedisConfig struct {
 }
 
 type PSQLConfig struct {
-	Host            string
-	Port            int
-	User            string
-	DBname          string
-	Password        string
+	Host     string
+	Port     int
+	User     string
+	DBname   string
+	Password string
+
 	MaxOpenConns    int
 	MaxIdleConns    int
 	MaxConnLifetime time.Duration
+
+	BatchSize int
 }
 
 type StoreConfig struct {
@@ -35,12 +38,15 @@ type StoreConfig struct {
 }
 
 type AppConfig struct {
-	MaxWorkers         int
+	MaxCrawlers        int
 	MaxConcurrentFetch int
-	LogsPath           string
-	ClawlerDelay       int
-	HttpTimeout        int
-	CrawlerTimeout     int
+
+	LogsPath string
+
+	ClawlerDelay int
+
+	HttpTimeout    int
+	CrawlerTimeout int
 }
 
 type Config struct {
@@ -80,6 +86,7 @@ func loadDatabaseConfig() PSQLConfig {
 	maxOpenConns := getIntWithDefault("PG_MAX_OPEN_CONNS", 20)
 	maxIdleConns := getIntWithDefault("PG_MAX_IDLE_CONNS", 20)
 	maxConnLifetime := getIntWithDefault("PG_MAX_CONN_LIFETIME", 0)
+	batchSize := getIntWithDefault("PG_BATCH_SIZE", 30)
 
 	return PSQLConfig{
 		Host:            host,
@@ -90,6 +97,7 @@ func loadDatabaseConfig() PSQLConfig {
 		MaxOpenConns:    maxOpenConns,
 		MaxIdleConns:    maxIdleConns,
 		MaxConnLifetime: time.Second * time.Duration(maxConnLifetime),
+		BatchSize:       batchSize,
 	}
 }
 
@@ -112,14 +120,14 @@ func loadRedisConfig() RedisConfig {
 }
 
 func loadAppConfig() AppConfig {
-	maxWorkers := getIntWithDefault("MAX_WORKERS", 10)
-	httpTimeout := getIntWithDefault("HTTP_TIMEOUT", 10)
-	crawlerTimeout := getIntWithDefault("CRAWLER_TIMEOUT", 30)
-	maxConcurrentFetch := getIntWithDefault("MAX_CONCURRENT_FETCH", 100)
-	logsPath := getWithDefault("LOGS_PATH", "./logs")
-	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 50)
+	maxCrawlers := getIntWithDefault("MAX_CRAWLERS", 20)
+	httpTimeout := getIntWithDefault("HTTP_TIMEOUT", 30)
+	crawlerTimeout := getIntWithDefault("CRAWLER_TIMEOUT", 60)
+	maxConcurrentFetch := getIntWithDefault("MAX_CONCURRENT_FETCH", 200)
+	logsPath := getWithDefault("LOGS_PATH", "./logs.json")
+	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 100)
 	return AppConfig{
-		MaxWorkers:         maxWorkers,
+		MaxCrawlers:        maxCrawlers,
 		CrawlerTimeout:     crawlerTimeout,
 		HttpTimeout:        httpTimeout,
 		MaxConcurrentFetch: maxConcurrentFetch,

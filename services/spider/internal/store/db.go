@@ -45,6 +45,10 @@ func NewDbClient(conf config.PSQLConfig) *SQLClient {
 		log.Fatalf("Failed to ping postgres ERROR: %v", err)
 	}
 
+	db.SetConnMaxLifetime(conf.MaxConnLifetime)
+	db.SetMaxOpenConns(conf.MaxOpenConns)
+	db.SetMaxIdleConns(conf.MaxIdleConns)
+
 	fmt.Println("Data Base Connectd")
 
 	return &SQLClient{
@@ -79,23 +83,29 @@ func (c *SQLClient) WithTx(ctx context.Context, fn func(tx *sql.Tx) error) error
 func (c *SQLClient) InsertPage(ctx context.Context, tx *sql.Tx, page *entity.Page) error {
 	var url_id string
 	err := tx.QueryRowContext(ctx,
-		`INSERT INTO urls(url) VALUES ($1) 
-				ON CONFLICT (url) DO UPDATE SET url = urls.url
-				RETURNING id`,
+		`WITH ins AS (
+		    INSERT INTO urls(url)
+		    VALUES ($1)
+		    ON CONFLICT (url) DO NOTHING
+		    RETURNING id
+		)
+		SELECT id FROM ins
+		UNION ALL
+		SELECT id FROM urls WHERE url = $1
+		LIMIT 1;`,
 		page.URL).Scan(&url_id)
 	if err != nil {
 		return fmt.Errorf("upsert url: %w", err)
 	}
-	fmt.Printf("Inserted URL with ID: %s\n", url_id)
 
 	metadata, err := json.Marshal(page.MetaData)
 	if err != nil {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
-	fmt.Printf("Marshalled metadata size: %d bytes\n", len(metadata))
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO pages(url_id, html, metadata) VALUES ($1,$2,$3)`,
+		`INSERT INTO pages(url_id, html, metadata) VALUES ($1,$2,$3)
+			ON CONFLICT (url_id) DO NOTHING`,
 		url_id,
 		page.HTML,
 		metadata,
@@ -103,8 +113,6 @@ func (c *SQLClient) InsertPage(ctx context.Context, tx *sql.Tx, page *entity.Pag
 	if err != nil {
 		return fmt.Errorf("insert page : %w", err)
 	}
-
-	fmt.Printf("Inserted page for URL ID: %s\n", url_id)
 
 	return nil
 }
@@ -164,7 +172,7 @@ func (c *SQLClient) InsertURLs(ctx context.Context, tx *sql.Tx, urls []string) (
 		ins AS (
 		    INSERT INTO urls (url)
 		    SELECT url FROM input
-			ON CONFLICT (url) DO UPDATE SET url = urls.url
+			ON CONFLICT (url) DO NOTHING
 		    RETURNING id, url
 		)
 		SELECT u.id

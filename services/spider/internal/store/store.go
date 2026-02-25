@@ -16,7 +16,7 @@ type Cache interface {
 	GetHostMetaData(ctx context.Context, h string) (*entity.Host, bool, error)
 	GetUrl(ctx context.Context) (string, bool, error)
 	AddUrls(ctx context.Context, urls []string) error
-	AddToVisitedUrl(ctx context.Context, u string) error
+	MarkVisited(ctx context.Context, u string) error
 	AddToWaitedHost(ctx context.Context, h string, delay int) error
 	Close()
 }
@@ -29,9 +29,10 @@ type DB interface {
 }
 
 type Store struct {
-	db    DB
-	cache Cache
-	log   *slog.Logger
+	db     DB
+	cache  Cache
+	config *config.StoreConfig
+	log    *slog.Logger
 }
 
 func NewStore(conf config.StoreConfig, log *utils.Logger) *Store {
@@ -39,9 +40,10 @@ func NewStore(conf config.StoreConfig, log *utils.Logger) *Store {
 	rd := NewRedisClient(conf.Cache)
 
 	return &Store{
-		db:    db,
-		cache: rd,
-		log:   log.With("component", "store"),
+		db:     db,
+		cache:  rd,
+		config: &conf,
+		log:    log.With("component", "store"),
 	}
 }
 
@@ -54,7 +56,8 @@ func (s *Store) Persist(ctx context.Context, page *entity.Page, host *entity.Hos
 	s.persistHost(ctx, host)
 	err := s.persistPage(ctx, page)
 	if err != nil {
-		return fmt.Errorf("persist page: %w", err)
+		s.log.Error("persist page data", "url", page.MetaData.URL, "error", err)
+		return err
 	}
 	return nil
 }
@@ -64,6 +67,7 @@ func (s *Store) persistPage(ctx context.Context, page *entity.Page) error {
 
 	if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		if err := s.db.InsertPage(ctx, tx, page); err != nil {
+			s.log.Error("insert page into database", "url", page.MetaData.URL, "err", err)
 			return fmt.Errorf("insert page: %w", err)
 		}
 		return nil
@@ -87,15 +91,13 @@ func (s *Store) persistPage(ctx context.Context, page *entity.Page) error {
 		}
 		return nil
 	}); err != nil {
-		s.log.Warn("failed to insert urls/edges", "url", page.MetaData.URL, "err", err)
-		return fmt.Errorf("failed to insert urls/edges: %w", err)
+		s.log.Warn("", "url", page.MetaData.URL, "err", err)
+		return err
 	}
-
-	fmt.Printf("Successfully persisted page: %s\n", page.MetaData.URL)
-
-	err := s.cache.AddToVisitedUrl(ctx, page.MetaData.URL)
+	err := s.cache.MarkVisited(ctx, page.MetaData.URL)
 	if err != nil {
-		return fmt.Errorf("add URL to visited set: %w", err)
+		s.log.Warn("add URL to visited set", "url", page.MetaData.URL, "error", err)
+		return err
 	}
 	err = s.cache.AddUrls(ctx, page.Links)
 	if err != nil {
@@ -127,7 +129,7 @@ func (s *Store) GetHostMetaData(ctx context.Context, h string) (*entity.Host, bo
 func (s *Store) Init(starters []string) error {
 	err := s.cache.AddUrls(context.Background(), starters)
 	if err != nil {
-		return fmt.Errorf("failed to add starter URLs to cache: %w", err)
+		return err
 	}
 	return nil
 }

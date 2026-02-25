@@ -58,20 +58,25 @@ func NewSpider(conf *config.Config) *Spider {
 
 func (s *Spider) Start(startUrls []string) {
 	if err := s.store.Init(startUrls); err != nil {
-		s.logger.Error("Failed to initialize store with start URLs", "error", err)
+		s.logger.Error(
+			"Failed to initialize store with start URLs",
+			"component",
+			"store",
+			"error",
+			err,
+		)
 		return
 	}
 
-	for i := 0; i < s.config.App.MaxWorkers; i++ {
+	for i := 0; i < s.config.App.MaxCrawlers; i++ {
 		s.wg.Add(1)
-		s.logger.Info("Starting worker", "worker_id", i)
-		go s.worker()
+		s.logger.Info("Starting worker", "component", "spider", "crawler_id", i)
+		go s.craller(i + 1)
 	}
 }
 
 func (s *Spider) Stop() {
 	s.cancel()
-	close(s.fetchpool)
 	s.wg.Wait()
 }
 
@@ -80,7 +85,7 @@ func (s *Spider) Close() {
 	s.logger.Close()
 }
 
-func (s *Spider) worker() {
+func (s *Spider) craller(craller_id int) {
 	defer s.wg.Done()
 
 	ticker := time.NewTicker(s.crawlerDelay)
@@ -91,57 +96,86 @@ func (s *Spider) worker() {
 		case <-s.ctx.Done():
 			return
 		case <-ticker.C:
-			s.crawl()
+			s.crawl(craller_id)
 		}
 	}
 }
 
-func (s *Spider) crawl() {
+func (s *Spider) crawl(crawler_id int) {
 	ctx, cancel := context.WithTimeout(s.ctx, s.crawlerTimeout)
 	defer cancel()
+
+	logger := s.logger.With("component", "crawler", "crawler_id", crawler_id)
 
 	select {
 	case s.fetchpool <- struct{}{}:
 	case <-ctx.Done():
-		fmt.Println("Worker timed out waiting for fetch slot")
+		fmt.Println("Crawler timed out waiting for fetch slot")
 		return
 	}
 	defer func() { <-s.fetchpool }()
 
 	rawUrl, ok, err := s.store.GetNextUrl(ctx)
 	if err != nil || !ok {
-		fmt.Println("No URL fetched from store or error occurred:", err)
+		// logger.Warn("Failed to fetch next URL from store", "error", err)
 		return
 	}
 
-	s.logger.Info("Fetched URL from store", "url", rawUrl)
+	logger.Info("Fetched URL from store",
+		"url", rawUrl)
 
 	u, err := url.Parse(rawUrl)
 	if err != nil {
+		logger.Error("Failed to parse URL",
+			"url", rawUrl, "error", err)
 		return
 	}
 
-	host, ok, err := s.store.GetHostMetaData(ctx, strings.TrimPrefix(u.Host, "www."))
+	host, ok, err := s.store.GetHostMetaData(ctx, u.Host)
 	if !ok {
+		logger.Info("Host metadata not found in store, generating new metadata",
+			"host", u.Host)
 		// Host metadata missing; generate using parser
 		host, err = s.newHostMetaData(ctx, u.Host)
 		if err != nil {
-			return
+			logger.Error("generate host metadata",
+				"host", u.Host, "error", err)
+
+			// use a safe default
+			host = &entity.Host{
+				MaxRetry:        5,
+				MaxPages:        10,
+				PagesCrawled:    0,
+				Delay:           5,
+				Name:            u.Host,
+				AllowedUrls:     []string{},
+				NotAllowedPaths: []string{},
+			}
+		} else {
+			logger.Info(
+				"Host metadata retrieved",
+				"host",
+				host.Name,
+				"delay",
+				host.Delay,
+				"max_retry",
+				host.MaxRetry,
+				"not_allowed_paths",
+				len(host.NotAllowedPaths),
+				"allowed_urls",
+				len(host.AllowedUrls),
+			)
 		}
 	}
-	if err != nil {
-		return
-	}
-
-	fmt.Printf("Host metadata for %s: %+v\n", u.Host, host)
 
 	page, err := s.fetchAndParse(rawUrl, host.MaxRetry, host.Delay)
 	if err != nil {
-		s.logger.Error("Failed to process page", "url", rawUrl, "error", err)
+		logger.Error("Failed to fetch and parse page",
+			"url", rawUrl, "error", err)
 		return
 	}
 
-	s.logger.Info(
+	logger.Info(
 		"Successfully processed page",
 		"url",
 		page.URL,
@@ -164,8 +198,6 @@ func (s *Spider) fetchAndParse(
 	u string,
 	maxRetry, delay int,
 ) (*entity.Page, error) {
-	s.logger.Info("Start crawling", "url", u)
-
 	body, statusCode, err := utils.GetReq(s.httpClient, u, maxRetry, delay)
 	if err != nil {
 		// Failed to fetch page after retries
@@ -176,9 +208,8 @@ func (s *Spider) fetchAndParse(
 	page, err := s.parser.ParseHTML(bytes.NewReader(body), u)
 	if err != nil {
 		// Failed to parse HTML
-		return nil, fmt.Errorf("HTML parsing failed: %w", err)
+		return nil, fmt.Errorf("HTML parsing: %w", err)
 	}
-	s.logger.Info("Successfully crawled page", "url", u, "status_code", statusCode)
 
 	if page.URL == "" {
 		// Ensure Page.Url is always set
@@ -201,6 +232,9 @@ func (s *Spider) newHostMetaData(ctx context.Context, raw string) (host *entity.
 	}
 
 	r, err := s.newRobots(u)
+	if err != nil {
+		return nil, err
+	}
 
 	sitemaps := parser.FetchSitemaps(s.httpClient, r.SiteMaps, u)
 
@@ -217,14 +251,12 @@ func (s *Spider) newHostMetaData(ctx context.Context, raw string) (host *entity.
 
 	s.logger.Info(
 		"Generated host metadata",
+		"component",
+		"spider",
 		"host",
 		host.Name,
-		"max_retry",
-		host.MaxRetry,
 		"delay",
 		host.Delay,
-		"max_pages",
-		host.MaxPages,
 	)
 
 	// persist in store

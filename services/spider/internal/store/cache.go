@@ -95,6 +95,50 @@ func (c *RedisClient) GetHostMetaData(ctx context.Context, h string) (*entity.Ho
 }
 
 // GetUrl retrieves a URL from Redis atomically.
+// func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
+// 	script := redis.NewScript(`
+// 	local res = redis.call("zpopmax", KEYS[1])
+// 	if not res[1] then
+// 		return false
+// 	end
+// 	local url = res[1]
+// 	local score = res[2]
+//
+// 	local host = url:match("^https?://([^/]+)")
+// 	if host and redis.call("get", host) == "1" then
+// 		redis.call("zadd", KEYS[1], score, url)
+// 		return false
+// 	end
+//
+// 	if redis.call("sismember", KEYS[2], url) == 1 then
+// 		return false
+// 	end
+//
+// 	return url
+// 	`)
+//
+// 	var err error
+// 	var val interface{}
+// 	for i := 0; i < c.maxRetry; i++ {
+// 		val, err = script.Run(ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
+// 		if err != nil {
+// 			// on error, wait and retry
+// 			time.Sleep(10 * time.Millisecond)
+// 			continue
+// 		}
+//
+// 		if valStr, ok := val.(string); ok && valStr != "" {
+// 			return valStr, true, nil
+// 		} else {
+// 			err = fmt.Errorf("script returned non-string or empty value: %v", val)
+// 		}
+//
+// 		time.Sleep(10 * time.Millisecond)
+// 	}
+//
+// 	return "", false, fmt.Errorf("no valid URL after %d retries err: %w", c.maxRetry, err)
+// }
+
 func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 	script := redis.NewScript(`
 	local res = redis.call("zpopmax", KEYS[1])
@@ -104,12 +148,6 @@ func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 	local url = res[1]
 	local score = res[2]
 
-	local host = url:match("^https?://([^/]+)")
-	if host and redis.call("get", host) == "1" then
-		redis.call("zadd", KEYS[1], score, url)
-		return false
-	end
-
 	if redis.call("sismember", KEYS[2], url) == 1 then
 		return false
 	end
@@ -117,8 +155,10 @@ func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 	return url
 	`)
 
+	var err error
+	var val interface{}
 	for i := 0; i < c.maxRetry; i++ {
-		val, err := script.Run(ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
+		val, err = script.Run(ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
 		if err != nil {
 			// on error, wait and retry
 			time.Sleep(10 * time.Millisecond)
@@ -127,12 +167,14 @@ func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 
 		if valStr, ok := val.(string); ok && valStr != "" {
 			return valStr, true, nil
+		} else {
+			err = fmt.Errorf("script returned non-string or empty value: %v", val)
 		}
 
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	return "", false, fmt.Errorf("no valid URL after %d retries", c.maxRetry)
+	return "", false, fmt.Errorf("no valid URL after %d retries err: %w", c.maxRetry, err)
 }
 
 // AddUrls adds multiple URLs to Redis sorted set.
@@ -156,7 +198,7 @@ func (c *RedisClient) AddUrls(ctx context.Context, urls []string) error {
 }
 
 // AddToVisitedUrl adds a URL to the visitedUrls set.
-func (c *RedisClient) AddToVisitedUrl(ctx context.Context, u string) error {
+func (c *RedisClient) MarkVisited(ctx context.Context, u string) error {
 	if u == "" {
 		return nil
 	}
@@ -165,7 +207,6 @@ func (c *RedisClient) AddToVisitedUrl(ctx context.Context, u string) error {
 	if err != nil {
 		return fmt.Errorf("add to visited URLs: %w", err)
 	}
-	fmt.Printf("Added URL to visited set: %s\n", u)
 
 	return nil
 }

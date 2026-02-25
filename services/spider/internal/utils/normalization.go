@@ -1,66 +1,16 @@
 package utils
 
 import (
-	"fmt"
-	"io"
+	"errors"
 	"net/http"
 	"net/url"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
 	"unicode/utf8"
 )
-
-func GetReq(
-	client *http.Client,
-	url string,
-	maxRetry, delay int,
-) ([]byte, int, error) {
-	req, err := http.NewRequest("GET", url, nil)
-	if err != nil {
-		return nil, 0, fmt.Errorf("request initialization failed: %w", err)
-	}
-	req.Header.Set(
-		"User-Agent",
-		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.5993.118 Safari/537.36",
-	)
-	req.Header.Set("Accept", "text/html")
-	req.Header.Set("Accept-Language", "en-US")
-
-	var res *http.Response
-	for attempt := range maxRetry {
-		if attempt > 0 {
-			time.Sleep(time.Second * time.Duration(delay))
-		}
-
-		res, err = client.Do(req)
-		if err != nil {
-			continue
-		}
-
-		statusCode := res.StatusCode
-		if statusCode >= 500 || statusCode == 429 {
-			res.Body.Close()
-			continue
-		}
-		if statusCode >= 400 {
-			return nil, statusCode, fmt.Errorf("client error: %d", statusCode)
-		}
-
-		body, err := io.ReadAll(io.LimitReader(res.Body, 10<<20)) // 10 MB
-		res.Body.Close()
-		if err != nil {
-			err = fmt.Errorf("failed to read response: %w", err)
-			continue
-		}
-
-		err = nil
-		return body, statusCode, nil
-	}
-
-	return nil, 0, fmt.Errorf("all %d retries failed: %w", maxRetry, err)
-}
 
 var (
 	disallowPathPrefixes = []string{
@@ -83,14 +33,18 @@ var (
 		".css", ".js", ".ico",
 	}
 
+	langSubdomainDomains = []string{
+		"wikipedia.org",
+		"wikibooks.org",
+		"wikivoyage.org",
+	}
 	// Wiki-specific: blocks /Template:Foo/xx/, /Help:Bar/en/, etc.
 	wikiLangSubpageRE   = regexp.MustCompile(`(?i)/[a-z]{2,3}(-[a-z]{2,4})?/?$`)
 	wikiNoisyNamespaces = []string{"/Template:", "/Help:", "/Manual:", "/Extension:"}
 )
 
 func NormalizeUrl(raw string, baseHost string) (string, bool) {
-	raw = sanitizeUTF8(raw)
-	if raw == "" || strings.HasPrefix(raw, "#") {
+	if !utf8.ValidString(raw) || strings.HasPrefix(raw, "#") {
 		return "", false
 	}
 
@@ -104,10 +58,6 @@ func NormalizeUrl(raw string, baseHost string) (string, bool) {
 	}
 
 	if shouldSkipByExtension(u.Path) {
-		return "", false
-	}
-
-	if shouldSkipByQuery(u.Query()) {
 		return "", false
 	}
 
@@ -139,13 +89,8 @@ func shouldSkipByExtension(path string) bool {
 	return false
 }
 
-func shouldSkipByQuery(q url.Values) bool {
-	for _, param := range disallowQueryParams {
-		if _, exists := q[param]; exists {
-			return true
-		}
-	}
-	return false
+func isValidQueryParam(q string) bool {
+	return !slices.Contains(disallowQueryParams, q)
 }
 
 func shouldSkipWikiLanguageSubpage(path string) bool {
@@ -172,6 +117,8 @@ func normalizeURLParts(u *url.URL, baseHost string) {
 	// Clean host
 	u.Host = strings.TrimPrefix(strings.ToLower(u.Host), "www.")
 
+	forceEnglishSubdomain(u)
+
 	// Remove fragment
 	u.Fragment = ""
 
@@ -180,7 +127,9 @@ func normalizeURLParts(u *url.URL, baseHost string) {
 		q := u.Query()
 		keys := make([]string, 0, len(q))
 		for k := range q {
-			keys = append(keys, k)
+			if isValidQueryParam(k) {
+				keys = append(keys, k)
+			}
 		}
 		sort.Strings(keys)
 
@@ -191,12 +140,12 @@ func normalizeURLParts(u *url.URL, baseHost string) {
 		u.RawQuery = sorted.Encode()
 	}
 
-	// Add trailing slash to directory-like paths (no extension, no query)
+	// Remove trailing slash
 	if len(u.Query()) == 0 &&
 		u.Path != "" &&
-		!strings.HasSuffix(u.Path, "/") &&
+		strings.HasSuffix(u.Path, "/") &&
 		!strings.Contains(u.Path, ".") {
-		u.Path += "/"
+		u.Path = strings.TrimSuffix(u.Path, "/")
 	}
 }
 
@@ -210,23 +159,66 @@ func NormalizeUrls(raws []string, baseHost string) []string {
 	return result
 }
 
-func sanitizeUTF8(s string) string {
-	b := []byte(s)
-	if utf8.Valid(b) {
-		return s
+func forceEnglishSubdomain(u *url.URL) {
+	u.Host = strings.ToLower(u.Host)
+	u.Host = strings.TrimPrefix(u.Host, "www.")
+
+	// Only act on known wiki-family domains
+	isKnownLangDomain := false
+	for _, d := range langSubdomainDomains {
+		if strings.HasSuffix(u.Host, d) {
+			isKnownLangDomain = true
+			break
+		}
+	}
+	if !isKnownLangDomain {
+		return
 	}
 
-	var runes []rune
-	for len(b) > 0 {
-		r, size := utf8.DecodeRune(b)
-		if r == utf8.RuneError && size == 1 {
-			b = b[1:] // skip invalid byte
-			continue
-		}
-		runes = append(runes, r)
-		b = b[size:]
+	hostParts := strings.Split(u.Host, ".")
+	if len(hostParts) < 3 {
+		return
 	}
-	return string(runes)
+
+	potentialLang := hostParts[0]
+	rest := strings.Join(hostParts[1:], ".")
+
+	if potentialLang == "en" {
+		return // already English
+	}
+
+	isLang := len(potentialLang) >= 2 && len(potentialLang) <= 5 &&
+		regexp.MustCompile(`^[a-z]+(-[a-z]+)?$`).MatchString(potentialLang)
+
+	if isLang {
+		u.Host = "en." + rest
+	}
+}
+
+func CheckURLExists(rawURL string) bool {
+	client := &http.Client{
+		Timeout: 10 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 5 {
+				return errors.New("too many redirects")
+			}
+			return nil
+		},
+	}
+
+	resp, err := client.Head(rawURL)
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode >= 200 && resp.StatusCode < 400
+}
+
+func skipNonEnglishSubdomains(u *url.URL) {
+	if strings.Contains(u.Host, "wikipedia.org") && !strings.HasPrefix(u.Host, "en.") {
+		u.Host = "en.wikipedia.org"
+	}
 }
 
 func ValidateLinks(links []string, disallowed []string) []string {

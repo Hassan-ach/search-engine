@@ -8,8 +8,6 @@ import (
 	"os"
 )
 
-var Log *Logger = NewMultiLogger("appLog.json")
-
 const (
 	colorReset  = "\033[0m"
 	colorRed    = "\033[31m"
@@ -135,16 +133,4 @@ func (m MultiHandler) WithGroup(name string) slog.Handler {
 type Logger struct {
 	*slog.Logger
 	file *os.File
-}
-
-func (l *Logger) Store() *slog.Logger {
-	return l.With("Context", "Store")
-}
-
-func (l *Logger) Parser() *slog.Logger {
-	return l.With("Context", "Parser")
-}
-
-func (l *Logger) General() *slog.Logger {
-	return l.With("Context", "General")
 }
