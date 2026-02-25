@@ -1,11 +1,7 @@
 mod core;
-use dotenv::from_path;
-use std::{error::Error, fs};
-use tracing::{level_filters::LevelFilter, Level};
-
-use tracing_subscriber::{filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt};
-
 use crate::core::indexer::index;
+use dotenv::from_path;
+use std::error::Error;
 
 async fn init() -> Result<(), Box<dyn Error>> {
     //
@@ -37,29 +33,11 @@ async fn init() -> Result<(), Box<dyn Error>> {
         std::env::var("DATABASE_URL").unwrap_or("not set".to_string())
     );
 
-    let log_file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("indexer.log")
-        .expect("cannot open log file");
-
-    let writer = std::sync::Mutex::new(log_file);
-
-    let filter = Targets::new()
-        .with_target("my_crate", Level::INFO)
-        .with_target("other_crate", LevelFilter::OFF);
-
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_writer(writer).with_ansi(false).json())
-        .with(fmt::layer().with_writer(std::io::stdout).with_ansi(true))
-        .with(filter)
-        .init();
     crate::core::psql::init().await;
     Ok(())
 }
 
 // TODO:
-// [] fix logger.
 // [] impl concurrency.
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {

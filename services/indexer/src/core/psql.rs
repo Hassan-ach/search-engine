@@ -5,7 +5,6 @@ use std::error::Error;
 use std::sync::OnceLock;
 
 use sqlx::{Pool, Postgres};
-use tracing::{info, warn};
 use uuid::Uuid;
 
 // Function connect to postgres and test it
@@ -22,7 +21,7 @@ async fn db_connectioon() -> Result<Pool<Postgres>, Box<dyn Error>> {
 
     let _ = sqlx::query("SELECT 1 + 1 as sum").fetch_one(&pool).await?;
 
-    info!("Data base connected successfully");
+    println!("Data base connected successfully");
     Ok(pool)
 }
 
@@ -66,14 +65,14 @@ pub async fn get_page() -> Result<Page, Box<dyn Error>> {
 
 pub async fn batch_words(words: HashMap<String, u32>, page_id: Uuid) {
     if words.is_empty() {
-        warn!(page_id = %page_id, "no words to index");
+        println!("no word to index, page_id: {}", page_id);
         return;
     }
 
     let map = match upsert_words(words.clone().into_keys().collect()).await {
         Some(m) => m,
         None => {
-            warn!(page_id = %page_id, "failed to upsert words");
+            println!("upsert words page_id: {}", page_id);
             return;
         }
     };
@@ -84,7 +83,7 @@ pub async fn batch_words(words: HashMap<String, u32>, page_id: Uuid) {
         .collect();
 
     if let Err(err) = link_words_to_page(page_id, word_id_count).await {
-        warn!(?err, page_id = %page_id, "failed to link words to page");
+        println!("link words to page, page_id: {}, err: {}", page_id, err);
     }
 }
 

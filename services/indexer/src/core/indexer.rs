@@ -1,10 +1,9 @@
-use std::thread::sleep;
-use std::time::Duration;
+use tokio::time::sleep;
+use tokio::time::Duration;
 
 use crate::core::psql::*;
 use crate::core::text_sink::parse;
 use sqlx::prelude::FromRow;
-use tracing::warn;
 use uuid::Uuid;
 
 #[derive(Debug, FromRow)]
@@ -15,22 +14,20 @@ pub struct Page {
 }
 
 pub async fn index() {
-    loop {
-        match get_page().await {
-            Ok(page) => {
-                match parse(page.html).await {
-                    Ok(words) => {
-                        batch_words(words, page.id).await;
-                    }
-                    Err(err) => {
-                        warn!(?err, url = %page.url_id, "faild to parse a page");
-                    }
-                };
-            }
-            Err(err) => {
-                warn!(?err, "failed to get page");
-                sleep(Duration::from_secs(5));
-            }
-        };
-    }
+    match get_page().await {
+        Ok(page) => {
+            match parse(page.html).await {
+                Ok(words) => {
+                    batch_words(words, page.id).await;
+                }
+                Err(err) => {
+                    println!("parse page id:{},  err: {}", page.url_id, err);
+                }
+            };
+        }
+        Err(err) => {
+            println!("get page err: {}", err);
+            sleep(Duration::from_millis(50)).await;
+        }
+    };
 }
