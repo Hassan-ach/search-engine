@@ -21,9 +21,6 @@ type SiteMaps struct {
 	Urls []u `xml:"url"`
 }
 
-// ParseSitemap parses a sitemap XML file and extracts all URLs listed in <loc> tags.
-// Returns a slice of normalized URL strings and any parsing error encountered.
-// Logs start, end, number of URLs found, and errors.
 func parseSitemap(file []byte) (*SiteMaps, error) {
 	fmt.Println("Starting sitemap.xml parsing")
 
@@ -33,12 +30,6 @@ func parseSitemap(file []byte) (*SiteMaps, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	// Extract URLs from <loc> tags
-	// locs := make([]string, len(sitemap.Urls))
-	// for i, u := range sitemap.Urls {
-	// 	locs[i] = u.Loc
-	// }
 
 	return &sitemap, nil
 }

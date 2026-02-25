@@ -21,7 +21,7 @@ type htmlCollector struct {
 func newHtmlCollector(baseURL *url.URL) *htmlCollector {
 	return &htmlCollector{
 		BaseURL: baseURL,
-	} // default deyal
+	}
 }
 
 func (c *htmlCollector) conllectText(text string) {

@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,42 +27,6 @@ func NewParser(client *http.Client, logger *utils.Logger) *Parser {
 	}
 }
 
-// func (p *Parser) FetchAndParseNewHostMetaDta(
-//
-//	ctx context.Context,
-//	raw string,
-//
-//	) (host *entity.Host, err error) {
-//		if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
-//			raw = "https://" + raw
-//		}
-//
-//		u, err := url.Parse(strings.TrimPrefix(raw, "www."))
-//		if err != nil {
-//			return
-//		}
-//
-//		r, err := NewRobots(p.Client, u)
-//
-//		sitemaps := fetchSitemaps(p.Client, r.SiteMaps, u)
-//
-//		// create Host object
-//		host = &entity.Host{
-//			MaxRetry:       5,
-//			Delay:          r.CrawlDelay,
-//			MaxPages:       10,
-//			PagesCrawled:   0,
-//			Name:           u.Host,
-//			AllowedUrls:    r.Allow,
-//			NotAllwedPaths: r.Disallow,
-//		}
-//
-//		// persist in store
-//		p.Cache.AddHostMetaData(ctx, host.Name, host)
-//		p.Cache.AddUrls(ctx, sitemaps)
-//
-//		return host, nil
-//	}
 func (p *Parser) ParseHTML(r io.Reader, baseURL string) (*entity.Page, error) {
 	doc, err := html.Parse(r)
 	if err != nil {
@@ -83,10 +48,62 @@ func (p *Parser) ParseHTML(r io.Reader, baseURL string) (*entity.Page, error) {
 	}
 	c.Meta.CrawledAt = time.Now()
 
+	p.log.Info(
+		"links_found",
+		len(c.Links),
+		"images_found",
+		len(c.Imags),
+	)
+
 	return &entity.Page{
 		MetaData: c.Meta,
 		Links: utils.NewSetFromSlice(
 			utils.NormalizeUrls(c.Links, u.Host)).GetAll(),
 		Images: utils.NewSetFromSlice(c.Imags).GetAll(),
 	}, nil
+}
+
+func (p *Parser) ParseRobots(txt, ua string) *entity.Robots {
+	r := &entity.Robots{
+		CrawlDelay: 5,
+	}
+
+	if ua == "" {
+		ua = "*"
+	}
+
+	var uaActive bool
+	for _, line := range strings.Split(txt, "\n") {
+
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+
+		lower := strings.ToLower(line)
+
+		switch {
+		case strings.HasPrefix(lower, "user-agent:"):
+			userAgent := strings.TrimSpace(line[11:])
+			uaActive = (userAgent == ua || userAgent == "*")
+		case uaActive:
+			switch {
+			case strings.HasPrefix(lower, "disallow:"):
+				rule := strings.TrimSpace(line[9:])
+				r.Disallow = append(r.Disallow, rule)
+			case strings.HasPrefix(lower, "allow:"):
+				rule := strings.TrimSpace(line[6:])
+				r.Allow = append(r.Allow, rule)
+			case strings.HasPrefix(lower, "crawl-delay:"):
+				if d, err := strconv.Atoi(strings.TrimSpace(line[12:])); err == nil && d > 0 {
+					r.CrawlDelay = d
+				}
+			}
+
+		case strings.HasPrefix(lower, "sitemap:"):
+			sitemapURL := strings.TrimSpace(line[8:])
+			r.SiteMaps = append(r.SiteMaps, sitemapURL)
+		}
+	}
+	return r
 }
