@@ -39,7 +39,8 @@ type AppConfig struct {
 	MaxConcurrentFetch int
 	LogsPath           string
 	ClawlerDelay       int
-	Timeout            time.Duration
+	HttpTimeout        int
+	CrawlerTimeout     int
 }
 
 type Config struct {
@@ -112,13 +113,15 @@ func loadRedisConfig() RedisConfig {
 
 func loadAppConfig() AppConfig {
 	maxWorkers := getIntWithDefault("MAX_WORKERS", 10)
-	timeout := getIntWithDefault("TIMEOUT", 30)
+	httpTimeout := getIntWithDefault("HTTP_TIMEOUT", 10)
+	crawlerTimeout := getIntWithDefault("CRAWLER_TIMEOUT", 30)
 	maxConcurrentFetch := getIntWithDefault("MAX_CONCURRENT_FETCH", 100)
 	logsPath := getWithDefault("LOGS_PATH", "./logs")
-	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 100)
+	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 50)
 	return AppConfig{
 		MaxWorkers:         maxWorkers,
-		Timeout:            time.Second * time.Duration(timeout),
+		CrawlerTimeout:     crawlerTimeout,
+		HttpTimeout:        httpTimeout,
 		MaxConcurrentFetch: maxConcurrentFetch,
 		LogsPath:           logsPath,
 		ClawlerDelay:       clawlerDelay,

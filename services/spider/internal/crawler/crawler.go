@@ -24,31 +24,33 @@ type Spider struct {
 	store      *store.Store
 	parser     *parser.Parser
 
-	wg     sync.WaitGroup
-	ctx    context.Context
-	cancel context.CancelFunc
+	wg             sync.WaitGroup
+	ctx            context.Context
+	cancel         context.CancelFunc
+	crawlerTimeout time.Duration
+	crawlerDelay   time.Duration
 
 	fetchpool chan struct{}
 	logger    *utils.Logger
 }
 
-type Metrics struct{}
-
 func NewSpider(conf *config.Config) *Spider {
-	ctx, cancel := context.WithCancel(context.Background())
-	httpClient := &http.Client{Timeout: 10 * time.Second}
+	httpClient := &http.Client{Timeout: time.Duration(conf.App.HttpTimeout) * time.Second}
 	logger := utils.NewMultiLogger(conf.App.LogsPath)
+	ctx, cancel := context.WithCancel(context.Background())
 
 	s := &Spider{
-		config:     conf,
-		httpClient: httpClient,
-		parser:     parser.NewParser(httpClient, logger),
-		store:      store.NewStore(conf.Store, logger),
-		wg:         sync.WaitGroup{},
-		ctx:        ctx,
-		cancel:     cancel,
-		fetchpool:  make(chan struct{}, conf.App.MaxConcurrentFetch),
-		logger:     logger,
+		config:         conf,
+		httpClient:     httpClient,
+		parser:         parser.NewParser(httpClient, logger),
+		store:          store.NewStore(conf.Store, logger),
+		wg:             sync.WaitGroup{},
+		ctx:            ctx,
+		cancel:         cancel,
+		crawlerTimeout: time.Duration(conf.App.CrawlerTimeout) * time.Second,
+		crawlerDelay:   time.Duration(conf.App.ClawlerDelay) * time.Microsecond,
+		fetchpool:      make(chan struct{}, conf.App.MaxConcurrentFetch),
+		logger:         logger,
 	}
 
 	fmt.Printf("Spider initialized: %+v\n", s)
@@ -82,7 +84,7 @@ func (s *Spider) Close() {
 func (s *Spider) worker() {
 	defer s.wg.Done()
 
-	ticker := time.NewTicker(time.Duration(s.config.App.ClawlerDelay) * time.Microsecond)
+	ticker := time.NewTicker(s.crawlerDelay)
 	defer ticker.Stop()
 
 	for {
@@ -95,11 +97,8 @@ func (s *Spider) worker() {
 	}
 }
 
-// crawl fetches a URL from the store, retrieves host metadata (from Redis or parser),
-// processes the page, normalizes links (removing disallowed paths), updates
-// Redis sets and counters, persists the page, and logs success or errors.
 func (s *Spider) crawl() {
-	ctx, cancel := context.WithTimeout(s.ctx, 30*time.Second)
+	ctx, cancel := context.WithTimeout(s.ctx, s.crawlerTimeout)
 	defer cancel()
 
 	select {
@@ -122,11 +121,18 @@ func (s *Spider) crawl() {
 		return
 	}
 
-	var host *entity.Host
-	host, err = s.getOrBuildHostMeta(u.Host)
+	host, ok, err := s.store.GetHostMetaData(ctx, strings.TrimPrefix(u.Host, "www."))
+	if !ok {
+		// Host metadata missing; generate using parser
+		host, err = s.newHostMetaData(ctx, u.Host)
+		if err != nil {
+			return
+		}
+	}
 	if err != nil {
 		return
 	}
+
 	fmt.Printf("Host metadata for %s: %+v\n", u.Host, host)
 
 	page, err := s.fetchAndParse(rawUrl, host.MaxRetry, host.Delay)
@@ -152,18 +158,6 @@ func (s *Spider) crawl() {
 
 	host.PagesCrawled++
 	s.store.Persist(ctx, page, host)
-}
-
-func (s *Spider) getOrBuildHostMeta(h string) (host *entity.Host, err error) {
-	host, ok, err := s.store.GetHostMetaData(s.ctx, strings.TrimPrefix(h, "www."))
-	if !ok {
-		// Host metadata missing; generate using parser
-		host, err = s.NewHostMetaData(h)
-		if err != nil {
-			return
-		}
-	}
-	return host, nil
 }
 
 func normalizeLinks(links []string, disallowed []string) []string {
@@ -228,7 +222,7 @@ func (s *Spider) fetchAndParse(
 	return page, nil
 }
 
-func (s *Spider) NewHostMetaData(raw string) (host *entity.Host, err error) {
+func (s *Spider) newHostMetaData(ctx context.Context, raw string) (host *entity.Host, err error) {
 	if !strings.HasPrefix(raw, "http://") && !strings.HasPrefix(raw, "https://") {
 		raw = "https://" + raw
 	}
@@ -267,8 +261,8 @@ func (s *Spider) NewHostMetaData(raw string) (host *entity.Host, err error) {
 
 	// persist in store
 	cache := s.store.GetCache()
-	cache.AddHostMetaData(s.ctx, host.Name, host)
-	cache.AddUrls(s.ctx, sitemaps)
+	cache.AddHostMetaData(ctx, host.Name, host)
+	cache.AddUrls(ctx, sitemaps)
 
 	return host, nil
 }
