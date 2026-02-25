@@ -121,11 +121,11 @@ func loadRedisConfig() RedisConfig {
 
 func loadAppConfig() AppConfig {
 	maxCrawlers := getIntWithDefault("MAX_CRAWLERS", 20)
-	httpTimeout := getIntWithDefault("HTTP_TIMEOUT", 30)
+	httpTimeout := getIntWithDefault("HTTP_TIMEOUT", 60)
 	crawlerTimeout := getIntWithDefault("CRAWLER_TIMEOUT", 60)
 	maxConcurrentFetch := getIntWithDefault("MAX_CONCURRENT_FETCH", 200)
 	logsPath := getWithDefault("LOGS_PATH", "./logs.json")
-	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 100)
+	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 200)
 	return AppConfig{
 		MaxCrawlers:        maxCrawlers,
 		CrawlerTimeout:     crawlerTimeout,
