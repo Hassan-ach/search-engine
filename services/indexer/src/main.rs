@@ -11,6 +11,7 @@ use std::io;
 use std::path::Path;
 use std::sync::Arc;
 use tokio::task::JoinHandle;
+use tokio::time::timeout;
 
 pub fn init_logger(log_file: &str) -> io::Result<Logger> {
     // Create log directory
@@ -74,7 +75,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     let log_clone = log.clone();
-    handles.push(tokio::spawn(async move {
+    let sig_handle = tokio::spawn(async move {
         match tokio::signal::ctrl_c().await {
             Ok(()) => {
                 info!(log_clone, "Ctrl-C received, sending shutdown signal");
@@ -84,13 +85,26 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 error!(log_clone, "Failed to listen for Ctrl-C"; "error" => %err);
             }
         }
-    }));
+    });
 
-    for handle in handles {
-        if let Err(err) = handle.await {
-            error!(log, "Task failed to join"; "error" => %err);
+    match timeout(std::time::Duration::from_secs(30), async {
+        for handle in handles {
+            if let Err(err) = handle.await {
+                error!(log, "Task failed to join"; "error" => %err);
+            }
         }
+    })
+    .await
+    {
+        Ok(_) => info!(log, "All indexer tasks completed"),
+        Err(_) => info!(
+            log,
+            "Timeout reached while waiting for indexer tasks to complete"
+        ),
     }
+
+    sig_handle.abort();
+    info!(log, "Indexer service shutting down gracefully");
 
     Ok(())
 }
