@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import time
 from utils import get_graph_edges, persist_pagerank, NodeMapper
@@ -10,15 +11,35 @@ import os
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler('backlinks.log'),
-        logging.StreamHandler()
+class JsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        payload = {
+            "timestamp": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
+            "level": record.levelname,
+            "logger": record.name,
+            "message": record.getMessage(),
+        }
+
+        if record.exc_info:
+            payload["exception"] = self.formatException(record.exc_info)
+
+        return json.dumps(payload, ensure_ascii=True)
+
+
+def configure_logging() -> None:
+    if logging.getLogger().handlers:
+        return
+
+    handlers: list[logging.Handler] = [
+        logging.FileHandler("backlinks.log"),
+        logging.StreamHandler(),
     ]
-)
+    formatter = JsonFormatter()
+
+    for handler in handlers:
+        handler.setFormatter(formatter)
+
+    logging.basicConfig(level=logging.INFO, handlers=handlers)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +87,7 @@ async def run_idf():
         logger.error(f"IDF job failed: {e}", exc_info=True)
 
 async def main():
+    configure_logging()
     load_dotenv("../../.env")
     
     # Validate environment variables
@@ -130,6 +152,7 @@ async def main():
 
 if __name__ == "__main__":
     try:
+        configure_logging()
         logger.info("Starting Backlinks Service...")
         asyncio.run(main())
     except KeyboardInterrupt:
