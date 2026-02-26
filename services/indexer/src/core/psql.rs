@@ -1,93 +1,98 @@
+use crate::core::config::PsqlConfig;
 use crate::core::indexer::Page;
 use std::collections::HashMap;
-use std::env;
 use std::error::Error;
-use std::sync::OnceLock;
 
-use sqlx::{Pool, Postgres};
+use anyhow::Result;
+use sqlx::{Database, Pool, Postgres};
 use uuid::Uuid;
+
+pub trait DB {
+    async fn get_page(&self) -> Result<Page>;
+    async fn batch_words(&self, words: HashMap<String, u32>, page_id: Uuid);
+}
+
+pub trait HasPool<DB: Database> {
+    fn get_pool(&self) -> &Pool<DB>;
+}
+
+#[derive(Debug, Clone)]
+pub struct Psql {
+    pub pool: Pool<Postgres>,
+}
+
+impl Psql {
+    pub async fn new(conf: PsqlConfig) -> Result<Self, Box<dyn Error>> {
+        let pool = db_connectioon(conf).await?;
+        Ok(Psql { pool })
+    }
+}
+
+impl HasPool<Postgres> for Psql {
+    fn get_pool(&self) -> &Pool<Postgres> {
+        &self.pool
+    }
+}
+
+impl DB for Psql {
+    async fn get_page(&self) -> Result<Page> {
+        let tx = self.pool.begin().await?;
+        // Create a query type mapping
+        let query = sqlx::query_as::<_, Page>(
+            "WITH cte AS (
+                 SELECT id, url_id, html
+                 FROM pages
+                 WHERE indexed = FALSE
+                 FOR UPDATE SKIP LOCKED
+                 LIMIT 1
+            )
+            UPDATE pages
+            SET indexed = TRUE
+            FROM cte
+            WHERE pages.id = cte.id
+            RETURNING pages.id, pages.url_id, pages.html",
+        );
+        // Fetch Optional row
+        let page = query.fetch_one(&self.pool).await?;
+        tx.commit().await?;
+        Ok(page)
+    }
+    async fn batch_words(&self, words: HashMap<String, u32>, page_id: Uuid) {
+        if words.is_empty() {
+            println!("no word to index, page_id: {}", page_id);
+            return;
+        }
+
+        let map = match upsert_words(&self.pool, words.clone().into_keys().collect()).await {
+            Some(m) => m,
+            None => {
+                println!("upsert words page_id: {}", page_id);
+                return;
+            }
+        };
+
+        let word_id_count: HashMap<Uuid, u32> = map
+            .into_iter()
+            .filter_map(|(word, id)| words.get(&word).map(|count| (id, *count)))
+            .collect();
+
+        if let Err(err) = link_words_to_page(&self.pool, page_id, word_id_count).await {
+            println!("link words to page, page_id: {}, err: {}", page_id, err);
+        }
+    }
+}
 
 // Function connect to postgres and test it
 // return a pool connect
-async fn db_connectioon() -> Result<Pool<Postgres>, Box<dyn Error>> {
-    let host = env::var("PG_HOST").expect("PG_HOST must be set");
-    let port = env::var("PG_PORT").expect("PG_PORT must be set");
-    let user = env::var("PG_USER").expect("PG_USER must be set");
-    let password = env::var("PG_PASSWORD").expect("PG_PASSWORD must be set");
-    let dbname = env::var("PG_DBNAME").expect("PG_DBNAME must be set");
-
-    let url = format!("postgres://{user}:{password}@{host}:{port}/{dbname}");
-    let pool = sqlx::postgres::PgPool::connect(&url).await?;
-
+async fn db_connectioon(conf: PsqlConfig) -> Result<Pool<Postgres>, Box<dyn Error>> {
+    let pool = sqlx::postgres::PgPool::connect(&conf.url).await?;
     let _ = sqlx::query("SELECT 1 + 1 as sum").fetch_one(&pool).await?;
-
     println!("Data base connected successfully");
     Ok(pool)
 }
 
-pub static EXECUTER: OnceLock<Pool<Postgres>> = OnceLock::new();
-
-// Function to initialisation of Executer global variable
-// This function should be call once at programme life time
-pub async fn init() {
-    if let Ok(cnc) = db_connectioon().await {
-        EXECUTER.set(cnc).unwrap();
-    }
-}
-
-pub async fn get_page() -> Result<Page, Box<dyn Error>> {
-    let tx = EXECUTER.get().unwrap().begin().await?;
-
-    // Create a query type mapping
-    let query = sqlx::query_as::<_, Page>(
-        "WITH cte AS (
-             SELECT id, url_id, html
-             FROM pages
-             WHERE indexed = FALSE
-             FOR UPDATE SKIP LOCKED
-             LIMIT 1
-        )
-
-        UPDATE pages
-        SET indexed = TRUE
-        FROM cte
-        WHERE pages.id = cte.id
-        RETURNING pages.id, pages.url_id, pages.html",
-    );
-
-    // Fetch Optional row
-    let page = query.fetch_one(EXECUTER.get().unwrap()).await?;
-
-    tx.commit().await?;
-
-    Ok(page)
-}
-
-pub async fn batch_words(words: HashMap<String, u32>, page_id: Uuid) {
-    if words.is_empty() {
-        println!("no word to index, page_id: {}", page_id);
-        return;
-    }
-
-    let map = match upsert_words(words.clone().into_keys().collect()).await {
-        Some(m) => m,
-        None => {
-            println!("upsert words page_id: {}", page_id);
-            return;
-        }
-    };
-
-    let word_id_count: HashMap<Uuid, u32> = map
-        .into_iter()
-        .filter_map(|(word, id)| words.get(&word).map(|count| (id, *count)))
-        .collect();
-
-    if let Err(err) = link_words_to_page(page_id, word_id_count).await {
-        println!("link words to page, page_id: {}, err: {}", page_id, err);
-    }
-}
-
 async fn link_words_to_page(
+    pool: &Pool<Postgres>,
     page_id: Uuid,
     word_id_count: HashMap<Uuid, u32>,
 ) -> Result<(), sqlx::Error> {
@@ -113,14 +118,14 @@ async fn link_words_to_page(
         &word_ids,
         &counts
     )
-    .execute(EXECUTER.get().expect("DB not initialized"))
+    .execute(pool)
     .await?;
 
     Ok(())
 }
 
 // Function to insert words in batch and return their ids
-async fn upsert_words(words: Vec<String>) -> Option<HashMap<String, Uuid>> {
+async fn upsert_words(pool: &Pool<Postgres>, words: Vec<String>) -> Option<HashMap<String, Uuid>> {
     if words.is_empty() {
         return Some(HashMap::new());
     }
@@ -136,7 +141,7 @@ async fn upsert_words(words: Vec<String>) -> Option<HashMap<String, Uuid>> {
         "#,
         &words[..]
     )
-    .fetch_all(EXECUTER.get().expect("DB not initialized"))
+    .fetch_all(pool)
     .await
     .ok()?;
 
