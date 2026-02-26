@@ -1,5 +1,6 @@
 use crate::core::config::PsqlConfig;
 use crate::core::indexer::Page;
+use slog::{error, info, warn, Logger};
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -19,12 +20,19 @@ pub trait HasPool<DB: Database> {
 #[derive(Debug, Clone)]
 pub struct Psql {
     pub pool: Pool<Postgres>,
+    pub conf: PsqlConfig,
+    pub log: Logger,
 }
 
 impl Psql {
-    pub async fn new(conf: PsqlConfig) -> Result<Self, Box<dyn Error>> {
-        let pool = db_connectioon(conf).await?;
-        Ok(Psql { pool })
+    pub async fn new(conf: PsqlConfig, log: Logger) -> Result<Self, Box<dyn Error>> {
+        let pool = db_connectioon(&conf).await?;
+        info!(log, "PostgreSQL connection pool created successfully";
+             "max_connections" => conf.max_connections,
+             "min_connections" => conf.min_connections,
+             "acquire_timeout_seconds" => conf.acquire_timeout_seconds.as_secs()
+        );
+        Ok(Psql { pool, conf, log })
     }
 }
 
@@ -59,14 +67,19 @@ impl DB for Psql {
     }
     async fn batch_words(&self, words: HashMap<String, u32>, page_id: Uuid) {
         if words.is_empty() {
-            println!("no word to index, page_id: {}", page_id);
+            warn!(self.log, "no word to index for page";
+                  "page_id" => page_id.to_string()
+            );
             return;
         }
 
         let map = match upsert_words(&self.pool, words.clone().into_keys().collect()).await {
-            Some(m) => m,
-            None => {
-                println!("upsert words page_id: {}", page_id);
+            Ok(m) => m,
+            Err(err) => {
+                error!(self.log, "failed to upsert words for page";
+                      "page_id" => page_id.to_string(),
+                    "error" => %err
+                );
                 return;
             }
         };
@@ -77,15 +90,24 @@ impl DB for Psql {
             .collect();
 
         if let Err(err) = link_words_to_page(&self.pool, page_id, word_id_count).await {
-            println!("link words to page, page_id: {}, err: {}", page_id, err);
+            error!(self.log, "failed to link words to page";
+                  "page_id" => page_id.to_string(),
+                  "error" => %err
+            );
         }
     }
 }
 
 // Function connect to postgres and test it
 // return a pool connect
-async fn db_connectioon(conf: PsqlConfig) -> Result<Pool<Postgres>, Box<dyn Error>> {
-    let pool = sqlx::postgres::PgPool::connect(&conf.url).await?;
+async fn db_connectioon(conf: &PsqlConfig) -> Result<Pool<Postgres>, Box<dyn Error>> {
+    let pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(conf.max_connections)
+        .min_connections(conf.min_connections)
+        .acquire_timeout(conf.acquire_timeout_seconds)
+        .connect(conf.url.as_str())
+        .await?;
+
     let _ = sqlx::query("SELECT 1 + 1 as sum").fetch_one(&pool).await?;
     println!("Data base connected successfully");
     Ok(pool)
@@ -125,9 +147,9 @@ async fn link_words_to_page(
 }
 
 // Function to insert words in batch and return their ids
-async fn upsert_words(pool: &Pool<Postgres>, words: Vec<String>) -> Option<HashMap<String, Uuid>> {
+async fn upsert_words(pool: &Pool<Postgres>, words: Vec<String>) -> Result<HashMap<String, Uuid>> {
     if words.is_empty() {
-        return Some(HashMap::new());
+        return Ok(HashMap::new());
     }
 
     // Using UNNEST to pass the entire vector as one parameter ($1)
@@ -142,13 +164,12 @@ async fn upsert_words(pool: &Pool<Postgres>, words: Vec<String>) -> Option<HashM
         &words[..]
     )
     .fetch_all(pool)
-    .await
-    .ok()?;
+    .await?;
 
     let mut ids = HashMap::with_capacity(rows.len());
     for row in rows {
         ids.insert(row.word, row.id);
     }
 
-    Some(ids)
+    Ok(ids)
 }

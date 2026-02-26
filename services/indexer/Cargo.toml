@@ -11,5 +11,7 @@ uuid = { version = "1", features = ["v4"] }
 dotenv = "0.15"
 anyhow = { version = "1.0", default-features = false }
 tokio-util = { version = "0.7", features = ["rt"] }
-# tracing = { version = "0.1", features = ["max_level_off"] }
-# tracing-subscriber = { version = "0.3", features = ["fmt", "json", "ansi"] }
+slog = "2.8.2"
+slog-json = "2.6.1"
+slog-async = "2.8.0"
+slog-term = "2.9.2"

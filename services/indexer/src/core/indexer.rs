@@ -4,6 +4,7 @@ use tokio::time::Duration;
 use crate::core::config::AppConfig;
 use crate::core::psql::DB;
 use crate::core::text_sink::parse;
+use slog::{error, info, Logger};
 use sqlx::prelude::FromRow;
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -19,6 +20,7 @@ pub struct Page {
 pub struct Indexer<DBImpl: DB> {
     db: DBImpl,
     conf: AppConfig,
+    log: Logger,
 }
 
 pub trait Indexe {
@@ -26,36 +28,46 @@ pub trait Indexe {
 }
 
 impl<DBImpl: DB> Indexer<DBImpl> {
-    pub fn new(db: DBImpl, conf: AppConfig) -> Self {
-        Indexer { db, conf }
+    pub fn new(db: DBImpl, conf: AppConfig, log: Logger) -> Self {
+        Indexer { db, conf, log }
     }
 
     pub async fn index(&self, tk: &CancellationToken) {
         if tk.is_cancelled() {
-            println!("indexing task received shutdown signal, stopping...");
+            info!(
+                self.log,
+                "indexing task received shutdown signal, stopping..."
+            );
             return;
         }
         match self.db.get_page().await {
             Ok(page) => {
-                println!(
-                    "get page id: {}, url_id: {}, html_size: {}",
-                    page.id,
-                    page.url_id,
-                    page.html.len()
+                info!(self.log, "fetched page for indexing";
+                     "page_id" => page.id.to_string(),
+                     "url_id" => page.url_id.to_string(),
+                     "html_size" => page.html.len()
                 );
 
                 match parse(page.html).await {
                     Ok(words) => {
-                        println!("parse page id:{}, word count: {}", page.url_id, words.len());
+                        info!(self.log, "parsed page for indexing";
+                             "page_id" => page.id.to_string(),
+                             "url_id" => page.url_id.to_string(),
+                             "word_count" => words.len()
+                        );
                         self.db.batch_words(words, page.id).await;
                     }
                     Err(err) => {
-                        println!("parse page id:{},  err: {}", page.url_id, err);
+                        error!(self.log, "failed to parse page";
+                               "page_id" => page.id.to_string(),
+                               "url_id" => page.url_id.to_string(),
+                               "error" => err.to_string()
+                        );
                     }
                 };
             }
             Err(err) => {
-                println!("get page err: {}", err);
+                error!(self.log, "failed to fetch page for indexing"; "error" => err.to_string());
                 tk.cancel();
                 sleep(Duration::from_millis(300)).await;
             }
@@ -68,7 +80,7 @@ impl<DBImpl: DB> Indexe for Indexer<DBImpl> {
         loop {
             tokio::select! {
                 _ = tk.cancelled() => {
-                    println!("shutdown signal received, stopping indexer...");
+                    info!(self.log, "indexing task received shutdown signal, stopping...");
                     break;
                 }
                 _ = async {
