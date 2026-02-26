@@ -8,10 +8,12 @@ import (
 	"strconv"
 
 	"github.com/google/uuid"
+	"github.com/joho/godotenv"
 	"github.com/lib/pq"
 )
 
 func dbSetup() *sql.DB {
+	err := godotenv.Load("../../.env")
 	port, err := strconv.Atoi(os.Getenv("PG_PORT"))
 	if err != nil {
 		panic("invalid port number")

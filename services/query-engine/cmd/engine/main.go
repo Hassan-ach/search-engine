@@ -1,21 +1,19 @@
 package main
 
 import (
-	"net/http"
+	"fmt"
 
-	"github.com/labstack/echo/v5"
-	"github.com/labstack/echo/v5/middleware"
+	"query-engine/internal"
 )
 
 func main() {
-	e := echo.New()
-	e.Use(middleware.RequestLogger())
+	pages, err := internal.Run("hello woeld")
+	if err != nil {
+		fmt.Println("Error running query engine:", err)
+		return
+	}
 
-	e.GET("/", func(c *echo.Context) error {
-		return c.String(http.StatusOK, "Hello, World!")
-	})
-
-	if err := e.Start(":1323"); err != nil {
-		e.Logger.Error("failed to start server", "error", err)
+	for _, page := range pages {
+		fmt.Printf("URL: %s, Global Score: %f\n", page.URL, page.GlobalScore)
 	}
 }
