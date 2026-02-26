@@ -7,7 +7,7 @@ import (
 )
 
 func main() {
-	pages, err := internal.Run("hello woeld")
+	pages, err := internal.Run("math engine")
 	if err != nil {
 		fmt.Println("Error running query engine:", err)
 		return
