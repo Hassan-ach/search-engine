@@ -14,6 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
+            "service": "backlinks",
             "timestamp": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
             "level": record.levelname,
             "logger": record.name,
@@ -21,7 +22,7 @@ class JsonFormatter(logging.Formatter):
         }
 
         if record.exc_info:
-            payload["exception"] = self.formatException(record.exc_info)
+            payload["error"] = self.formatException(record.exc_info)
 
         return json.dumps(payload, ensure_ascii=True)
 
