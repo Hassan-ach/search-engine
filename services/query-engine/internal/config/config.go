@@ -23,7 +23,8 @@ type PsqlConfig struct {
 }
 
 type StoreConfig struct {
-	DB PsqlConfig
+	DB       PsqlConfig
+	PageSize int
 }
 
 type RankingConfig struct {
@@ -51,8 +52,10 @@ func LoadConfig(envPath string) (*Config, error) {
 }
 
 func loadStoreConfig() StoreConfig {
+	pageSize := getIntWithDefault("PAGE_SIZE", 20)
 	return StoreConfig{
-		DB: loadDatabaseConfig(),
+		DB:       loadDatabaseConfig(),
+		PageSize: pageSize,
 	}
 }
 

@@ -38,7 +38,7 @@ func main() {
 	fmt.Printf("query: %s\n", query)
 
 	s := time.Now()
-	pages, err := ranker.Rank(query)
+	pages, err := ranker.Rank(query, 0)
 	fmt.Printf("ranking took: %d ms\n", time.Since(s).Abs().Milliseconds())
 	if err != nil {
 		fmt.Printf("err: %v", err)

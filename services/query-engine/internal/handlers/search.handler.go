@@ -3,11 +3,14 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"query-engine/internal/service"
 
-	"github.com/labstack/echo/v5"
 	"query-engine/view/result"
+
+	"github.com/labstack/echo/v5"
 )
 
 type SearchingHandler struct {
@@ -24,15 +27,29 @@ func NewSearchHandler(ranker service.Ranker, speller service.Speller) *Searching
 
 func (h SearchingHandler) Handle(c *echo.Context) error {
 	query := c.QueryParam("query")
+	pageNum := getPageNum(c)
 
 	fmt.Printf("query: %s\n", query)
 
 	sugs := h.Speller.GetSuggestions(query)
 
-	pages, err := h.Ranker.Rank(sugs)
+	pages, err := h.Ranker.Rank(sugs, pageNum)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, fmt.Sprint("err: %w", err))
 	}
 
 	return render(c, result.Show(pages))
+}
+
+func getPageNum(c *echo.Context) int {
+	page := c.QueryParam("page")
+	pageNum := 1
+
+	if page != "" {
+		v, err := strconv.Atoi(page)
+		if err == nil {
+			pageNum = v
+		}
+	}
+	return pageNum
 }

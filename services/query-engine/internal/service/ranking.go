@@ -25,8 +25,8 @@ func NewRankingService(store *store.PsqlStore, conf config.RankingConfig) Rankin
 	}
 }
 
-func (r RankingService) Rank(query []string) ([]*model.Page, error) {
-	data, err := r.store.GetData(query)
+func (r RankingService) Rank(query []string, pageNum int) ([]*model.Page, error) {
+	data, err := r.store.GetData(query, pageNum)
 	if err != nil {
 		return nil, err
 	}
@@ -57,10 +57,10 @@ func tfIdf(
 
 	M := make([][]float64, len(pages))
 	for _, page := range pages {
-		idx, ok := pageMapper.GetIndex(page.URLID)
+		idx, ok := pageMapper.GetIndex(page.ID)
 		if !ok {
 			// this should never happen
-			panic(fmt.Sprintf("page with URLID %s not found in page mapper", page.URLID))
+			panic(fmt.Sprintf("page with ID %s not found in page mapper", page.ID))
 		}
 
 		M[idx] = docVector(page, wordIdf, wordMapper, len(query))
@@ -69,10 +69,10 @@ func tfIdf(
 	queryVec := queryVector(query, wordIdf, wordMapper)
 	docScores := make(map[*model.Page]float64, len(pages))
 	for _, page := range pages {
-		idx, ok := pageMapper.GetIndex(page.URLID)
+		idx, ok := pageMapper.GetIndex(page.ID)
 		if !ok {
 			// this should never happen
-			panic(fmt.Sprintf("page with URLID %s not found in page mapper", page.URLID))
+			panic(fmt.Sprintf("page with ID %s not found in page mapper", page.ID))
 		}
 		score := cosineSimilarity(M[idx], queryVec)
 		docScores[page] = score
@@ -93,7 +93,7 @@ func sort(pages map[*model.Page]float64,
 	}
 
 	slices.SortStableFunc(pgs, func(a, b *model.Page) int {
-		if a.GlobalScore > b.GlobalScore {
+		if a.GlobalScore < b.GlobalScore {
 			return 1
 		}
 		if a.GlobalScore == b.GlobalScore {

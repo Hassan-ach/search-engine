@@ -5,7 +5,7 @@ import (
 )
 
 type Ranker interface {
-	Rank(query []string) ([]*model.Page, error)
+	Rank(query []string, pageNum int) ([]*model.Page, error)
 }
 
 type Speller interface {

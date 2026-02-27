@@ -15,7 +15,7 @@ import (
 )
 
 type Store interface {
-	GetData(words []string) (*Data, error)
+	GetData(words []string, pageNum int) (*Data, error)
 }
 
 type Data struct {
@@ -49,78 +49,96 @@ func NewStore(conf config.StoreConfig) PsqlStore {
 	}
 }
 
-func (s *PsqlStore) GetData(words []string) (*Data, error) {
+func (s *PsqlStore) GetData(words []string, pageNum int) (*Data, error) {
 	sql := `
-		SELECT 
-		    w.word, 
-		    w.idf,
-		    p.url_id,
-			u.url,
-		    pw.tf,
-		    pr.score,
-			p.metadata
-		FROM words w
-		INNER JOIN page_word pw ON w.id = pw.word_id
-		INNER JOIN pages p ON pw.page_id = p.id
-		INNER JOIN page_rank pr ON p.url_id = pr.url_id
-		INNER JOIN urls u ON p.url_id = u.id
-		WHERE w.word = ANY($1)
-	`
+		WITH ranked AS (
+		    SELECT
+		        p.id,
+		        u.url,
+		        pr.score AS pr,
+		        p.metadata,
+		        COUNT(DISTINCT w.id) AS word_count,
+		        COALESCE(
+		            json_agg(
+		                json_build_object(
+		                    'word', w.word,
+		                    'idf',  w.idf,
+							'tf',	pw.tf
+		                )
+		            ),
+		            '[]'
+		        ) AS word_set
+		    FROM words w
+		    INNER JOIN page_word pw ON w.id = pw.word_id
+		    INNER JOIN pages p      ON pw.page_id = p.id
+		    INNER JOIN page_rank pr ON p.url_id = pr.url_id
+		    INNER JOIN urls u       ON p.url_id = u.id
+		    WHERE w.word = ANY($1)
+		    GROUP BY p.id, pr.score, u.url, p.metadata
+		)
+		SELECT *
+		FROM ranked
+		ORDER BY word_count DESC,
+		         pr DESC,
+		         id ASC
+		LIMIT $2 OFFSET $3`
 
-	rows, err := s.conn.Query(sql, pq.Array(words))
+	rows, err := s.conn.Query(sql, pq.Array(words), s.conf.PageSize, pageNum*s.conf.PageSize)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
 	defer rows.Close()
 
 	wordIdf := make(map[string]float64, len(words))
-	mapPages := make(map[uuid.UUID]*model.Page)
+	pgs := make([]*model.Page, 0, s.conf.PageSize)
 
 	for rows.Next() {
-		var word string
-		var idf float64
-		var urlID uuid.UUID
-		var url string
-		var tf int
-		var prScore float64
-		var metadata []byte
-		var meta model.MetaData
+		var (
+			id         uuid.UUID
+			url        string
+			prScore    float64
+			metadata   []byte
+			word_count int
+			word_set   []byte
 
-		err := rows.Scan(&word, &idf, &urlID, &url, &tf, &prScore, &metadata)
+			meta    model.MetaData
+			wordSet []model.Word
+		)
+
+		err := rows.Scan(&id, &url, &prScore, &metadata, &word_count, &word_set)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan data: %w", err)
 		}
 
 		err = json.Unmarshal(metadata, &meta)
 		if err != nil {
-			panic(fmt.Sprintf("failed to unmarshal metadata for url %s: %v", url, err))
+			return nil, fmt.Errorf("failed to unmarshal metadata for url %s: %w", url, err)
 		}
 
-		wordIdf[word] = idf
-		pg, ok := mapPages[urlID]
-		if !ok {
-			pg = &model.Page{
-				URLID:    urlID,
-				URL:      url,
-				PRScore:  prScore,
-				Words:    make(map[string]int, len(words)),
-				MetaData: meta,
-			}
-			pg.MetaData = meta
-			mapPages[urlID] = pg
+		err = json.Unmarshal(word_set, &wordSet)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal word set for url %s: %w", url, err)
 		}
-		pg.Words[word] = tf
-	}
+		page := &model.Page{
+			ID:       id,
+			URL:      url,
+			PRScore:  prScore,
+			Words:    make(map[string]int, len(wordSet)),
+			MetaData: meta,
+		}
 
-	pgs := make([]*model.Page, 0, len(mapPages))
-	for _, p := range mapPages {
-		pgs = append(pgs, p)
+		for _, w := range wordSet {
+			wordIdf[w.Word] = w.Idf
+			page.Words[w.Word] = w.Tf
+		}
+
+		pgs = append(pgs, page)
 	}
 
 	pageMapper := util.NewPageMapper()
 
 	for _, page := range pgs {
-		pageMapper.MapValue(page.URLID)
+		pageMapper.MapValue(page.ID)
 	}
 	wordMapper := util.NewWordMapper()
 	for _, w := range words {
