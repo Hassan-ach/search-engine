@@ -55,7 +55,7 @@ impl<DBImpl: DB> Indexer<DBImpl> {
                              "url_id" => page.url_id.to_string(),
                              "word_count" => words.len()
                         );
-                        self.db.batch_words(words, page.id).await;
+                        let _ = self.db.batch_words(words, page.id).await;
                     }
                     Err(err) => {
                         error!(self.log, "failed to parse page";
@@ -69,7 +69,6 @@ impl<DBImpl: DB> Indexer<DBImpl> {
             Err(err) => {
                 error!(self.log, "failed to fetch page for indexing"; "error" => err.to_string());
                 tk.cancel();
-                sleep(Duration::from_millis(300)).await;
             }
         };
     }

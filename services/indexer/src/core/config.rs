@@ -13,12 +13,15 @@ pub struct PsqlConfig {
     pub max_connections: u32,
     pub min_connections: u32,
     pub acquire_timeout_seconds: std::time::Duration,
+    pub word_batch_size: usize,
+    pub page_word_batch_size: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub log_path: String,
     pub loop_delay_ms: u64,
+    pub indexer_count: usize,
 }
 
 pub fn load_config(env_path: String) -> Config {
@@ -34,10 +37,15 @@ fn load_app_config() -> AppConfig {
         .unwrap_or_else(|_| "100".to_string())
         .parse::<u64>()
         .expect("LOOP_DELAY_MS must be a number");
+    let indexer_count = env::var("INDEXER_COUNT")
+        .unwrap_or_else(|_| "4".to_string())
+        .parse::<usize>()
+        .expect("INDEXER_COUNT must be a number");
 
     AppConfig {
         log_path,
         loop_delay_ms,
+        indexer_count,
     }
 }
 
@@ -59,6 +67,14 @@ fn load_psql_config() -> PsqlConfig {
         .unwrap_or_else(|_| "5".to_string())
         .parse::<u64>()
         .expect("ACQUIRE_TIMEOUT_SECONDS must be a number");
+    let word_batch_size = env::var("WORD_BATCH_SIZE")
+        .unwrap_or_else(|_| "1000".to_string())
+        .parse::<usize>()
+        .expect("WORD_BATCH_SIZE must be a number");
+    let page_word_batch_size = env::var("PAGE_WORD_BATCH_SIZE")
+        .unwrap_or_else(|_| "500".to_string())
+        .parse::<usize>()
+        .expect("PAGE_WORD_BATCH_SIZE must be a number");
 
     let url = format!("postgres://{user}:{password}@{host}:{port}/{dbname}");
     PsqlConfig {
@@ -66,5 +82,7 @@ fn load_psql_config() -> PsqlConfig {
         max_connections,
         min_connections,
         acquire_timeout_seconds: std::time::Duration::from_secs(acquire_timeout),
+        word_batch_size,
+        page_word_batch_size,
     }
 }

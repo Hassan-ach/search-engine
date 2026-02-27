@@ -13,6 +13,79 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let conf = load_config("../../.env".to_string());
+    let worker_count = conf.app.indexer_count.clone();
+    if worker_count == 0 {
+        panic!("INDEXER_COUNT must be greater than 0");
+    }
+
+    let log = init_logger(conf.app.log_path.clone().as_str())?;
+    info!(log, "Indexer service starting up"; "worker_count" => worker_count);
+
+    let psql = Psql::new(conf.psql, log.clone()).await?;
+    let indx = Arc::new(Indexer::<Psql>::new(psql, conf.app, log.clone()));
+
+    let token = tokio_util::sync::CancellationToken::new();
+    let mut handles = Vec::<JoinHandle<()>>::new();
+
+    // Start multiple indexer tasks
+    for i in 0..worker_count {
+        info!(log, "Starting indexer indexes"; "indexer_id" => i);
+        let token_clone = token.clone();
+        let job = indx.clone();
+        handles.push(tokio::spawn(async move {
+            job.start(token_clone).await;
+        }));
+    }
+
+    let log_clone = log.clone();
+    let sig_handle = tokio::spawn(async move {
+        // listen for Ctrl-C signal
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                info!(log_clone, "Ctrl-C received, sending shutdown signal");
+            }
+            Err(err) => {
+                error!(log_clone, "Failed to listen for Ctrl-C"; "error" => %err);
+            }
+        }
+    });
+
+    // wait for signal handler to complete (which happens after Ctrl-C is received)
+    tokio::select! {
+        _ = sig_handle => {
+            info!(log, "Signal handler task completed");
+        }
+        _ = token.cancelled() => {
+            info!(log, "Cancellation token was cancelled");
+        }
+    }
+    token.cancel();
+
+    // wait for all indexer tasks to complete, but with a timeout to prevent hanging indefinitely
+    match timeout(std::time::Duration::from_secs(30), async {
+        for handle in handles {
+            if let Err(err) = handle.await {
+                error!(log, "Task failed to join"; "error" => %err);
+            }
+        }
+    })
+    .await
+    {
+        Ok(_) => info!(log, "All indexer tasks completed"),
+        Err(_) => info!(
+            log,
+            "Timeout reached while waiting for indexer tasks to complete"
+        ),
+    }
+
+    info!(log, "Indexer service shutting down");
+
+    Ok(())
+}
+
 pub fn init_logger(log_file: &str) -> io::Result<Logger> {
     // Create log directory
     if let Some(parent) = Path::new(log_file).parent() {
@@ -51,60 +124,4 @@ pub fn init_logger(log_file: &str) -> io::Result<Logger> {
     let async_drain = slog_async::Async::new(drain).chan_size(1024).build();
 
     Ok(Logger::root(Arc::new(async_drain).fuse(), o!()))
-}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    let conf = load_config("../../.env".to_string());
-    let log = init_logger(conf.app.log_path.clone().as_str())?;
-
-    let psql = Psql::new(conf.psql, log.clone()).await?;
-    let indx = Arc::new(Indexer::<Psql>::new(psql, conf.app, log.clone()));
-
-    let token = tokio_util::sync::CancellationToken::new();
-
-    let mut handles = Vec::<JoinHandle<()>>::new();
-
-    for i in 0..4 {
-        info!(log, "Starting indexer indexes"; "indexer_id" => i);
-        let token_clone = token.clone();
-        let job = indx.clone();
-        handles.push(tokio::spawn(async move {
-            job.start(token_clone).await;
-        }));
-    }
-
-    let log_clone = log.clone();
-    let sig_handle = tokio::spawn(async move {
-        match tokio::signal::ctrl_c().await {
-            Ok(()) => {
-                info!(log_clone, "Ctrl-C received, sending shutdown signal");
-                token.cancel();
-            }
-            Err(err) => {
-                error!(log_clone, "Failed to listen for Ctrl-C"; "error" => %err);
-            }
-        }
-    });
-
-    match timeout(std::time::Duration::from_secs(30), async {
-        for handle in handles {
-            if let Err(err) = handle.await {
-                error!(log, "Task failed to join"; "error" => %err);
-            }
-        }
-    })
-    .await
-    {
-        Ok(_) => info!(log, "All indexer tasks completed"),
-        Err(_) => info!(
-            log,
-            "Timeout reached while waiting for indexer tasks to complete"
-        ),
-    }
-
-    sig_handle.abort();
-    info!(log, "Indexer service shutting down gracefully");
-
-    Ok(())
 }
