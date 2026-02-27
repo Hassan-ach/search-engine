@@ -5,16 +5,12 @@ use std::collections::HashMap;
 use std::error::Error;
 
 use anyhow::Result;
-use sqlx::{Database, Pool, Postgres};
+use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 pub trait DB {
     async fn get_page(&self) -> Result<Page>;
     async fn batch_words(&self, words: HashMap<String, u32>, page_id: Uuid) -> Result<()>;
-}
-
-pub trait HasPool<DB: Database> {
-    fn get_pool(&self) -> &Pool<DB>;
 }
 
 #[derive(Debug, Clone)]
@@ -33,12 +29,6 @@ impl Psql {
              "acquire_timeout_seconds" => conf.acquire_timeout_seconds.as_secs()
         );
         Ok(Psql { pool, conf, log })
-    }
-}
-
-impl HasPool<Postgres> for Psql {
-    fn get_pool(&self) -> &Pool<Postgres> {
-        &self.pool
     }
 }
 
@@ -73,21 +63,25 @@ impl DB for Psql {
             return Ok(());
         }
 
-        let map =
-            match batch_upsert_words(&self.pool, words.clone().into_keys().collect(), &self.log)
-                .await
-            {
-                Ok(m) => m,
+        let map = match batch_upsert_words(
+            &self.pool,
+            words.clone().into_keys().collect(),
+            self.conf.word_batch_size,
+            &self.log,
+        )
+        .await
+        {
+            Ok(m) => m,
 
-                // this never gonna happen
-                Err(err) => {
-                    error!(self.log, "failed to upsert words for page";
-                          "page_id" => page_id.to_string(),
-                        "error" => %err
-                    );
-                    return Err(err);
-                }
-            };
+            // this never gonna happen
+            Err(err) => {
+                error!(self.log, "failed to upsert words for page";
+                      "page_id" => page_id.to_string(),
+                    "error" => %err
+                );
+                return Err(err);
+            }
+        };
 
         let word_id_count: HashMap<Uuid, u32> = map
             .into_iter()
@@ -95,8 +89,14 @@ impl DB for Psql {
             .collect();
 
         // this never gonna happen too.
-        if let Err(err) =
-            batch_link_words_to_page(&self.pool, page_id, word_id_count, &self.log).await
+        if let Err(err) = batch_link_words_to_page(
+            &self.pool,
+            page_id,
+            word_id_count,
+            self.conf.page_word_batch_size,
+            &self.log,
+        )
+        .await
         {
             error!(self.log, "failed to link words to page";
                   "page_id" => page_id.to_string(),
@@ -132,11 +132,14 @@ async fn upsert_words(pool: &Pool<Postgres>, words: Vec<String>) -> Result<HashM
     // Using UNNEST to pass the entire vector as one parameter ($1)
     let rows = sqlx::query!(
         r#"
-        INSERT INTO words (word)
-        SELECT * FROM UNNEST($1::text[])
-        ON CONFLICT (word) DO UPDATE 
-            SET word = EXCLUDED.word
-        RETURNING id, word
+        WITH inserted AS (
+            INSERT INTO words (word)
+            SELECT * FROM UNNEST($1::text[])
+            ON CONFLICT (word) DO NOTHING
+        )
+        SELECT words.id, words.word FROM words
+        INNER JOIN UNNEST($1::text[]) u(word)
+        ON words.word = u.word
         "#,
         &words[..]
     )
@@ -151,11 +154,10 @@ async fn upsert_words(pool: &Pool<Postgres>, words: Vec<String>) -> Result<HashM
     Ok(ids)
 }
 
-const BATCH_SIZE: usize = 1000; // Process words in chunks of 1000
-
 async fn batch_upsert_words(
     pool: &Pool<Postgres>,
     words: Vec<String>,
+    batch_size: usize,
     log: &Logger,
 ) -> Result<HashMap<String, Uuid>> {
     if words.is_empty() {
@@ -165,7 +167,7 @@ async fn batch_upsert_words(
     let mut all_ids = HashMap::with_capacity(words.len());
 
     // Process words in chunks
-    for chunk in words.chunks(BATCH_SIZE) {
+    for chunk in words.chunks(batch_size) {
         match upsert_words(pool, chunk.to_vec()).await {
             Ok(chunk_ids) => {
                 all_ids.extend(chunk_ids);
@@ -183,12 +185,11 @@ async fn batch_upsert_words(
     Ok(all_ids)
 }
 
-const PAGE_WORD_BATCH_SIZE: usize = 500;
-
 async fn batch_link_words_to_page(
     pool: &Pool<Postgres>,
     page_id: Uuid,
     word_id_count: HashMap<Uuid, u32>,
+    batch_size: usize,
     log: &Logger,
 ) -> Result<()> {
     if word_id_count.is_empty() {
@@ -197,7 +198,7 @@ async fn batch_link_words_to_page(
 
     let entries: Vec<_> = word_id_count.iter().collect();
 
-    for chunk in entries.chunks(PAGE_WORD_BATCH_SIZE) {
+    for chunk in entries.chunks(batch_size) {
         let mut word_ids = Vec::with_capacity(chunk.len());
         let mut counts = Vec::with_capacity(chunk.len());
 
