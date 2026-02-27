@@ -1,0 +1,20 @@
+package home
+import "query-engine/view/layout"
+
+
+templ Show() {
+    @layout.Base(){
+        <div>
+            <h1>Welcome to the Query Engine</h1>
+            <p>This is the home page. Use the navigation to access different features.</p>
+        </div>
+        <form action="/search" method="GET">
+            <input
+            type="text"
+            name="query"
+            placeholder="Search..."
+            required
+            >
+        </form>
+    }
+}

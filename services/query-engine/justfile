@@ -1,0 +1,6 @@
+run-web:
+    templ generate
+    go run cmd/server/main.go
+
+run-cli query:
+    go run cmd/cli/main.go "{{query}}"

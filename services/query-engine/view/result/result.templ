@@ -1,0 +1,17 @@
+package result
+
+import "query-engine/internal/model"
+
+templ Show(pages []*model.Page) {
+    <div>
+        <h1>Query Result</h1>
+        <p>This is where the query results will be displayed.</p>
+    </div>
+    <div>
+        <ul>
+            for _, p := range pages {
+              <li><a href={p.URL}>pages with score: {p.GlobalScore}</a></li>
+            }
+        </ul>
+    </div>
+}

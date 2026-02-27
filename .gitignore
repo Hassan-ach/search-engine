@@ -1,3 +1,4 @@
+
 # === Common ===
 .DS_Store
 .idea/
@@ -13,7 +14,6 @@ data/
 *.txt
 *.png
 *.json
-
 # === Rust ===
 target/
 **/*.rs.bk
