@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"github.com/labstack/echo/v5"
-	"query-engine/view/home"
+	"query-engine/view/page/home"
 )
 
 type HomeHandler struct{}

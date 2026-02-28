@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"log"
 
-	"query-engine/internal/config"
+	"query-engine/internal/config/store"
 	"query-engine/internal/model"
 	"query-engine/internal/util"
 
@@ -26,10 +26,10 @@ type Data struct {
 }
 type PsqlStore struct {
 	conn *sql.DB
-	conf config.StoreConfig
+	conf store.StoreConfig
 }
 
-func NewStore(conf config.StoreConfig) PsqlStore {
+func NewStore(conf store.StoreConfig) PsqlStore {
 	urls := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		conf.DB.Host, conf.DB.Port, conf.DB.User, conf.DB.Password, conf.DB.DBName)
 

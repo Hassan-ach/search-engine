@@ -38,3 +38,6 @@ coverage/
 !requirements.txt
 venv/
 __pycache__/
+
+# === Node.js ===
+node_modules/

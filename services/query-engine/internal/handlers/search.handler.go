@@ -4,11 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"query-engine/internal/service"
 
-	"query-engine/view/result"
+	"query-engine/view/page/result"
 
 	"github.com/labstack/echo/v5"
 )

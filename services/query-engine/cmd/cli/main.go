@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"query-engine/internal/config"
-	"query-engine/internal/service"
+	"query-engine/internal/service/ranking"
 	"query-engine/internal/store"
 )
 
@@ -23,6 +23,7 @@ func main() {
 		fmt.Println("missing input")
 		os.Exit(1)
 	}
+
 	conf, err := config.LoadConfig("../../.env")
 	store := store.NewStore(conf.Store)
 
@@ -32,7 +33,7 @@ func main() {
 	// }
 	speller := mockSpeller{}
 
-	ranker := service.NewRankingService(&store, conf.Ranker)
+	ranker := ranking.NewRankingService(&store, conf.Ranker)
 
 	query := speller.GetSuggestions(os.Args[1])
 	fmt.Printf("query: %s\n", query)

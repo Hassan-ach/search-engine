@@ -1,6 +1,37 @@
-run-web:
-    templ generate
-    go run cmd/server/main.go
+default: dev
 
-run-cli query:
+templ-generate:
+    templ generate
+
+templ-watch:
+    templ generate --watch
+
+tailwind-build:
+    npx tailwindcss -i ./static/css/input.css -o ./public/css/styles.css
+
+tailwind-build-prod:
+    npx tailwindcss -i ./static/css/input.css -o ./public/css/styles.css --minify
+
+tailwind-watch:
+    npx tailwindcss -i ./static/css/input.css -o ./public/css/styles.css --watch
+
+js-build:
+    npx esbuild ./static/js/main.js --bundle --sourcemap --outfile=public/js/index.js
+
+js-prod:
+    npx esbuild ./static/js/main.js --bundle --minify --outfile=public/js/index.js
+
+js-watch:
+    npx esbuild ./static/js/main.js --bundle --sourcemap --outfile=public/js/index.js --watch
+
+dev: templ-generate tailwind-build js-build
+    air
+
+build: templ-generate tailwind-build-prod js-prod
+    go build -o ./bin/main ./cmd/server/main.go
+
+cli query:
     go run cmd/cli/main.go "{{query}}"
+
+tidy:
+    go mod tidy

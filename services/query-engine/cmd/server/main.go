@@ -5,7 +5,8 @@ import (
 
 	"query-engine/internal/config"
 	"query-engine/internal/handlers"
-	"query-engine/internal/service"
+	"query-engine/internal/service/ranking"
+	"query-engine/internal/service/spellchecker"
 	"query-engine/internal/store"
 
 	"github.com/labstack/echo/v5"
@@ -23,18 +24,19 @@ func main() {
 
 	store := store.NewStore(conf.Store)
 
-	speller, err := service.NewAspellSpellingService()
+	speller, err := spellchecker.NewAspellSpellingService()
 	if err != nil {
 		panic("failed to initialize speller: " + err.Error())
 	}
 
-	ranker := service.NewRankingService(&store, conf.Ranker)
+	ranker := ranking.NewRankingService(&store, conf.Ranker)
 
 	homeHandler := &handlers.HomeHandler{}
 	rankingHandler := handlers.NewSearchHandler(ranker, speller)
 
 	fmt.Printf("starting server on port 1323\n")
 
+	e.Static("/public", "public")
 	e.GET("/", homeHandler.Handle)
 	e.GET("/search", rankingHandler.Handle)
 
