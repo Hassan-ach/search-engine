@@ -9,23 +9,16 @@ import (
 )
 
 type RankingService struct {
-	store store.Store
-	conf  ranker.RankingConfig
+	conf ranker.RankingConfig
 }
 
-func NewRankingService(store *store.PsqlStore, conf ranker.RankingConfig) RankingService {
+func NewRankingService(conf ranker.RankingConfig) RankingService {
 	return RankingService{
-		store: store,
-		conf:  conf,
+		conf: conf,
 	}
 }
 
-func (r RankingService) Rank(query []string, pageNum int) ([]*model.Page, error) {
-	data, err := r.store.GetData(query, pageNum)
-	if err != nil {
-		return nil, err
-	}
-
+func (r RankingService) Rank(data *store.Data) ([]*model.Page, error) {
 	pages, err := tfIdf(data)
 	if err != nil {
 		return nil, fmt.Errorf("failed to rank nodes: %w", err)
@@ -33,7 +26,7 @@ func (r RankingService) Rank(query []string, pageNum int) ([]*model.Page, error)
 
 	normalizeTFIDF(pages)
 
-	rankedPages, err := sort(pages, 0.5, data.PageMapper, data.WordMapper)
+	rankedPages, err := sort(pages, 0.5)
 	if err != nil {
 		return nil, fmt.Errorf("failed to rank nodes: %w", err)
 	}

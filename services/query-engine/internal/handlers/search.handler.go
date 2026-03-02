@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"query-engine/internal/service"
+	"query-engine/internal/store"
 
 	"query-engine/view/page/result"
 
@@ -15,29 +16,73 @@ import (
 type SearchingHandler struct {
 	Ranker  service.Ranker
 	Speller service.Speller
+	Store   store.Store
 }
 
-func NewSearchHandler(ranker service.Ranker, speller service.Speller) *SearchingHandler {
+func NewSearchHandler(
+	store store.Store,
+	ranker service.Ranker,
+	speller service.Speller,
+) *SearchingHandler {
 	return &SearchingHandler{
 		ranker,
 		speller,
+		store,
 	}
 }
 
 func (h SearchingHandler) Handle(c *echo.Context) error {
 	query := c.QueryParam("query")
-	pageNum := getPageNum(c)
-
-	fmt.Printf("query: %s\n", query)
+	filter := c.QueryParam("tab")
+	if filter == "" {
+		filter = "all"
+	}
 
 	sugs := h.Speller.GetSuggestions(query)
 
-	pages, err := h.Ranker.Rank(sugs, pageNum)
+	switch filter {
+	case "images":
+		return handleImagesTab(c)
+	case "graph":
+		return handleGraphTab(c)
+	}
+
+	return h.handleAllTab(c, sugs)
+}
+
+func (h SearchingHandler) handleAllTab(c *echo.Context, sugs []string) error {
+	ctx := c.Request().Context()
+
+	currentPage := getPageNum(c)
+
+	totalPages, err := h.Store.GetTotalPages(ctx, sugs)
 	if err != nil {
 		return c.String(http.StatusInternalServerError, fmt.Sprint("err: %w", err))
 	}
 
-	return render(c, result.Show(pages))
+	data, err := h.Store.GetData(ctx, sugs, currentPage-1)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, fmt.Sprint("err: %w", err))
+	}
+
+	pages, err := h.Ranker.Rank(data)
+	if err != nil {
+		return c.String(http.StatusInternalServerError, fmt.Sprint("err: %w", err))
+	}
+
+	isHtmx := c.Request().Header.Get("HX-Request") == "true"
+
+	return render(c, result.ShowAll(pages, totalPages, currentPage, isHtmx))
+}
+
+func handleImagesTab(c *echo.Context) error {
+	isHtmx := c.Request().Header.Get("HX-Request") == "true"
+	return render(c, result.ShowImages(nil, isHtmx))
+}
+
+func handleGraphTab(c *echo.Context) error {
+	isHtmx := c.Request().Header.Get("HX-Request") == "true"
+	return render(c, result.ShowGraph(nil, isHtmx))
 }
 
 func getPageNum(c *echo.Context) int {
@@ -46,7 +91,7 @@ func getPageNum(c *echo.Context) int {
 
 	if page != "" {
 		v, err := strconv.Atoi(page)
-		if err == nil {
+		if err == nil && v > 0 {
 			pageNum = v
 		}
 	}

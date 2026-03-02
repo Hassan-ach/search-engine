@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -15,7 +16,8 @@ import (
 )
 
 type Store interface {
-	GetData(words []string, pageNum int) (*Data, error)
+	GetData(c context.Context, words []string, pageNum int) (*Data, error)
+	GetTotalPages(c context.Context, query []string) (int, error)
 }
 
 type Data struct {
@@ -49,7 +51,7 @@ func NewStore(conf store.StoreConfig) PsqlStore {
 	}
 }
 
-func (s *PsqlStore) GetData(words []string, pageNum int) (*Data, error) {
+func (s PsqlStore) GetData(c context.Context, words []string, pageNum int) (*Data, error) {
 	sql := `
 		WITH ranked AS (
 		    SELECT
@@ -83,7 +85,13 @@ func (s *PsqlStore) GetData(words []string, pageNum int) (*Data, error) {
 		         id ASC
 		LIMIT $2 OFFSET $3`
 
-	rows, err := s.conn.Query(sql, pq.Array(words), s.conf.PageSize, pageNum*s.conf.PageSize)
+	rows, err := s.conn.QueryContext(
+		c,
+		sql,
+		pq.Array(words),
+		s.conf.PageSize,
+		pageNum*s.conf.PageSize,
+	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
@@ -151,4 +159,20 @@ func (s *PsqlStore) GetData(words []string, pageNum int) (*Data, error) {
 		WordMapper: wordMapper,
 		PageMapper: pageMapper,
 	}, nil
+}
+
+func (s PsqlStore) GetTotalPages(c context.Context, query []string) (int, error) {
+	sql := `
+		SELECT COUNT(DISTINCT p.id)
+		FROM words w
+		JOIN page_word pw ON w.id = pw.word_id
+		JOIN pages p      ON pw.page_id = p.id
+		WHERE w.word = ANY($1)`
+
+	var total int
+	err := s.conn.QueryRowContext(c, sql, pq.Array(query)).Scan(&total)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get total pages: %w", err)
+	}
+	return total, nil
 }
