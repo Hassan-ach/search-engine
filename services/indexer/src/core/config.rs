@@ -50,11 +50,7 @@ fn load_app_config() -> AppConfig {
 }
 
 fn load_psql_config() -> PsqlConfig {
-    let host = env::var("PG_HOST").expect("PG_HOST must be set");
-    let port = env::var("PG_PORT").expect("PG_PORT must be set");
-    let user = env::var("PG_USER").expect("PG_USER must be set");
-    let password = env::var("PG_PASSWORD").expect("PG_PASSWORD must be set");
-    let dbname = env::var("PG_DBNAME").expect("PG_DBNAME must be set");
+    let url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
     let max_connections = env::var("PG_MAX_CONNECTIONS")
         .unwrap_or_else(|_| "10".to_string())
         .parse::<u32>()
@@ -76,7 +72,6 @@ fn load_psql_config() -> PsqlConfig {
         .parse::<usize>()
         .expect("PAGE_WORD_BATCH_SIZE must be a number");
 
-    let url = format!("postgres://{user}:{password}@{host}:{port}/{dbname}");
     PsqlConfig {
         url,
         max_connections,
