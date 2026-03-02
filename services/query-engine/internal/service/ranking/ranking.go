@@ -3,10 +3,10 @@ package ranking
 import (
 	"fmt"
 
-	"query-engine/internal/apperror"
-	"query-engine/internal/config/ranker"
-	"query-engine/internal/model"
-	"query-engine/internal/store"
+	"github.com/Hassan-ach/boogle/services/engine/internal/apperror"
+	"github.com/Hassan-ach/boogle/services/engine/internal/config/ranker"
+	"github.com/Hassan-ach/boogle/services/engine/internal/model"
+	"github.com/Hassan-ach/boogle/services/engine/internal/store"
 )
 
 type RankingService struct {

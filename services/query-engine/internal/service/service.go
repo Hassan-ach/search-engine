@@ -1,8 +1,8 @@
 package service
 
 import (
-	"query-engine/internal/model"
-	"query-engine/internal/store"
+	"github.com/Hassan-ach/boogle/services/engine/internal/model"
+	"github.com/Hassan-ach/boogle/services/engine/internal/store"
 )
 
 type Ranker interface {

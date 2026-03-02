@@ -3,11 +3,11 @@ package main
 import (
 	"embed"
 
-	"query-engine/internal/config"
-	"query-engine/internal/handlers"
-	"query-engine/internal/service/ranking"
-	"query-engine/internal/service/spellchecker"
-	"query-engine/internal/store"
+	"github.com/Hassan-ach/boogle/services/engine/internal/config"
+	"github.com/Hassan-ach/boogle/services/engine/internal/handlers"
+	"github.com/Hassan-ach/boogle/services/engine/internal/service/ranking"
+	"github.com/Hassan-ach/boogle/services/engine/internal/service/spellchecker"
+	"github.com/Hassan-ach/boogle/services/engine/internal/store"
 
 	"github.com/labstack/echo/v5"
 	echoMiddleware "github.com/labstack/echo/v5/middleware"

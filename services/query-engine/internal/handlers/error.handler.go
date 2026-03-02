@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"query-engine/internal/apperror"
-	errorpage "query-engine/view/page/error"
+	"github.com/Hassan-ach/boogle/services/engine/internal/apperror"
+	errorpage "github.com/Hassan-ach/boogle/services/engine/view/page/error"
 
 	"github.com/labstack/echo/v5"
 )

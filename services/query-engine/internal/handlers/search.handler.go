@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"strconv"
 
-	"query-engine/internal/service"
-	"query-engine/internal/store"
+	"github.com/Hassan-ach/boogle/services/engine/internal/service"
+	"github.com/Hassan-ach/boogle/services/engine/internal/store"
 
-	"query-engine/view/page/result"
+	"github.com/Hassan-ach/boogle/services/engine/view/page/result"
 
 	"github.com/labstack/echo/v5"
 )

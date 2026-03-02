@@ -3,8 +3,8 @@ package config
 import (
 	"fmt"
 
-	"query-engine/internal/config/ranker"
-	"query-engine/internal/config/store"
+	"github.com/Hassan-ach/boogle/services/engine/internal/config/ranker"
+	"github.com/Hassan-ach/boogle/services/engine/internal/config/store"
 
 	"github.com/joho/godotenv"
 )

@@ -1,6 +1,6 @@
 package ranker
 
-import "query-engine/internal/util"
+import "github.com/Hassan-ach/boogle/services/engine/internal/util"
 
 type RankingConfig struct {
 	MaxResults int

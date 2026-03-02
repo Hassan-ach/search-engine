@@ -1,4 +1,4 @@
-module query-engine
+module github.com/Hassan-ach/boogle/services/engine
 
 go 1.25.7
 

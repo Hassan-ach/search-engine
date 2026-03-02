@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"slices"
 
-	"query-engine/internal/model"
-	"query-engine/internal/util"
+	"github.com/Hassan-ach/boogle/services/engine/internal/model"
+	"github.com/Hassan-ach/boogle/services/engine/internal/util"
 )
 
 func sort(pages map[*model.Page]float64,

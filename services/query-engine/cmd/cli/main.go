@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"query-engine/internal/config"
-	"query-engine/internal/service/ranking"
-	"query-engine/internal/store"
+	"github.com/Hassan-ach/boogle/services/engine/internal/config"
+	"github.com/Hassan-ach/boogle/services/engine/internal/service/ranking"
+	"github.com/Hassan-ach/boogle/services/engine/internal/store"
 )
 
 type mockSpeller struct{}

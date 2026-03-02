@@ -1,6 +1,6 @@
 package store
 
-import "query-engine/internal/util"
+import "github.com/Hassan-ach/boogle/services/engine/internal/util"
 
 type PsqlConfig struct {
 	Host     string

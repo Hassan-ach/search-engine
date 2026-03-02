@@ -7,10 +7,10 @@ import (
 	"fmt"
 	"log"
 
-	"query-engine/internal/apperror"
-	"query-engine/internal/config/store"
-	"query-engine/internal/model"
-	"query-engine/internal/util"
+	"github.com/Hassan-ach/boogle/services/engine/internal/apperror"
+	"github.com/Hassan-ach/boogle/services/engine/internal/config/store"
+	"github.com/Hassan-ach/boogle/services/engine/internal/model"
+	"github.com/Hassan-ach/boogle/services/engine/internal/util"
 
 	"github.com/google/uuid"
 	"github.com/lib/pq"
