@@ -6,14 +6,10 @@ import (
 
 	"query-engine/internal/model"
 	"query-engine/internal/util"
-
-	"github.com/google/uuid"
 )
 
 func sort(pages map[*model.Page]float64,
 	factor float64,
-	pageMapper util.Mapper[uuid.UUID],
-	wordMapper util.Mapper[string],
 ) ([]*model.Page, error) {
 	pgs := make([]*model.Page, 0, len(pages))
 	for p := range pages {
@@ -25,8 +21,16 @@ func sort(pages map[*model.Page]float64,
 		if a.GlobalScore < b.GlobalScore {
 			return 1
 		}
+		// just to make sure that the order is deterministic.
 		if a.GlobalScore == b.GlobalScore {
-			return 0
+			if len(a.Words) < len(b.Words) {
+				return 1
+			}
+			if len(a.Words) == len(b.Words) {
+				if a.MetaData.Title < b.MetaData.Title {
+					return 1
+				}
+			}
 		}
 		return -1
 	})
