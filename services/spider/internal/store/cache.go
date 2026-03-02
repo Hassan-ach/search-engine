@@ -11,27 +11,28 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"spider/internal/config"
-	"spider/internal/entity"
-	"spider/internal/utils"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
 )
 
 type RedisClient struct {
 	conn     *redis.Client
-	ctx      context.Context
 	delay    int
 	maxRetry int
 }
 
-// NewCacheClient initializes and returns a Redis client.
+// NewRedisClient initializes and returns a Redis client and wrapper.
 // Registers entity.Host type with gob for serialization.
-func NewRedisClient(ctx context.Context, conf *config.RedisConfig) *RedisClient {
+func NewRedisClient(conf config.RedisConfig) *RedisClient {
 	port := strconv.Itoa(conf.Port)
 	client := redis.NewClient(&redis.Options{
-		Addr:     conf.Addr + ":" + port,
-		Password: conf.Password,
-		DB:       conf.DB,
-		Protocol: 2,
+		Addr:         conf.Addr + ":" + port,
+		Password:     conf.Password,
+		DB:           conf.DB,
+		Protocol:     2,
+		DialTimeout:  5 * time.Second,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 5 * time.Second,
 	})
 
 	_, err := client.Ping(context.Background()).Result()
@@ -42,30 +43,31 @@ func NewRedisClient(ctx context.Context, conf *config.RedisConfig) *RedisClient 
 	// Required for gob encoding/decoding of Host structs
 	gob.Register(entity.Host{})
 	fmt.Println("Cache Connected")
+
 	return &RedisClient{
 		conn:     client,
-		ctx:      ctx,
 		delay:    conf.Delay,
 		maxRetry: conf.MaxRetry,
 	}
 }
 
+func (c *RedisClient) Close() {
+	_ = c.conn.Close()
+}
+
 // AddHostMetaData serializes a Host struct with gob and stores it in Redis.
-// Logs warnings for invalid input and errors for encoding/storage failures.
-func (c *RedisClient) AddHostMetaData(h string, host *entity.Host) error {
+func (c *RedisClient) AddHostMetaData(ctx context.Context, h string, host *entity.Host) error {
 	if h == "" || host == nil {
-		return nil
+		return fmt.Errorf("invalid host metadata: host key and Host struct cannot be empty")
 	}
 
 	var buf bytes.Buffer
 	if err := gob.NewEncoder(&buf).Encode(host); err != nil {
-		utils.Log.Cache().Debug("encode host metadata", "host", h, "error", err)
 		return fmt.Errorf("encode metadata: %w", err)
 	}
 
-	err := c.conn.HSet(c.ctx, "hosts", h, buf.Bytes()).Err()
+	err := c.conn.HSet(ctx, "hosts", h, buf.Bytes()).Err()
 	if err != nil {
-		utils.Log.Cache().Debug("store host metadata", "host", h, "error", err)
 		return fmt.Errorf("store metadata: %w", err)
 	}
 
@@ -73,22 +75,18 @@ func (c *RedisClient) AddHostMetaData(h string, host *entity.Host) error {
 }
 
 // GetHostMetaData retrieves and decodes a Host struct from Redis.
-// Logs each step: retrieval, missing host, decode error, successful fetch.
-func (c *RedisClient) GetHostMetaData(h string) (*entity.Host, bool, error) {
-	val, err := c.conn.HGet(c.ctx, "hosts", h).Bytes()
+func (c *RedisClient) GetHostMetaData(ctx context.Context, h string) (*entity.Host, bool, error) {
+	val, err := c.conn.HGet(ctx, "hosts", h).Bytes()
 	if err == redis.Nil {
-		utils.Log.Cache().Debug("host metadata not found", "host", h)
-		return nil, false, fmt.Errorf("host metadata not found for host: %s", h)
+		return nil, false, nil
 	}
 
 	if err != nil {
-		utils.Log.Cache().Debug("retrieve host metadata", "host", h, "error", err)
 		return nil, false, fmt.Errorf("retrieve host metadata: %w", err)
 	}
 
 	var host entity.Host
 	if err := gob.NewDecoder(bytes.NewReader(val)).Decode(&host); err != nil {
-		utils.Log.Cache().Debug("decode host metadata", "host", h, "error", err)
 		return nil, false, fmt.Errorf("decode host metadata: %w", err)
 	}
 
@@ -96,63 +94,102 @@ func (c *RedisClient) GetHostMetaData(h string) (*entity.Host, bool, error) {
 }
 
 // GetUrl retrieves a URL from Redis atomically.
-// Skips URLs if host is recently visited or URL is already visited.
-// Uses Lua script to ensure atomicity.
-func (c *RedisClient) GetUrl() (string, bool, error) {
+// func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
+// 	script := redis.NewScript(`
+// 	local res = redis.call("zpopmax", KEYS[1])
+// 	if not res[1] then
+// 		return false
+// 	end
+// 	local url = res[1]
+// 	local score = res[2]
+//
+// 	local host = url:match("^https?://([^/]+)")
+// 	if host and redis.call("get", host) == "1" then
+// 		redis.call("zadd", KEYS[1], score, url)
+// 		return false
+// 	end
+//
+// 	if redis.call("sismember", KEYS[2], url) == 1 then
+// 		return false
+// 	end
+//
+// 	return url
+// 	`)
+//
+// 	var err error
+// 	var val interface{}
+// 	for i := 0; i < c.maxRetry; i++ {
+// 		val, err = script.Run(ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
+// 		if err != nil {
+// 			// on error, wait and retry
+// 			time.Sleep(10 * time.Millisecond)
+// 			continue
+// 		}
+//
+// 		if valStr, ok := val.(string); ok && valStr != "" {
+// 			return valStr, true, nil
+// 		} else {
+// 			err = fmt.Errorf("script returned non-string or empty value: %v", val)
+// 		}
+//
+// 		time.Sleep(10 * time.Millisecond)
+// 	}
+//
+// 	return "", false, fmt.Errorf("no valid URL after %d retries err: %w", c.maxRetry, err)
+// }
+
+func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 	script := redis.NewScript(`
 	local res = redis.call("zpopmax", KEYS[1])
 	if not res[1] then
-	    return false
+		return false
 	end
 	local url = res[1]
 	local score = res[2]
 
-	local host = url:match("^https?://([^/]+)")
-	if host and redis.call("get", host) == "1" then
-	    redis.call("zadd", KEYS[1], score, url)
-	    return false
-	end
-
 	if redis.call("sismember", KEYS[2], url) == 1 then
-	    return false
+		return false
 	end
 
 	return url
 	`)
 
-	for range c.maxRetry {
-		val, err := script.Run(c.ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
+	var err error
+	var val any
+	for i := 0; i < c.maxRetry; i++ {
+		val, err = script.Run(ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
 		if err != nil {
+			// on error, wait and retry
+			time.Sleep(10 * time.Millisecond)
 			continue
 		}
 
 		if valStr, ok := val.(string); ok && valStr != "" {
 			return valStr, true, nil
+		} else {
+			err = fmt.Errorf("script returned non-string or empty value: %v", val)
 		}
 
 		time.Sleep(time.Duration(c.delay) * time.Millisecond)
 	}
-	utils.Log.Cache().Debug("failed to get valid URL after retries")
-	return "", false, fmt.Errorf("no valid URL after %d retries", c.maxRetry)
+
+	return "", false, fmt.Errorf("no valid URL after %d retries err: %w", c.maxRetry, err)
 }
 
-// AddUrls adds multiple URLs to Redis set.
-// Logs warnings for empty input and errors for failed Redis operations.
-func (c *RedisClient) AddUrls(urls []string) error {
+// AddUrls adds multiple URLs to Redis sorted set.
+func (c *RedisClient) AddUrls(ctx context.Context, urls []string) error {
 	if len(urls) == 0 {
-		utils.Log.Cache().Debug("empty URL list passed to AddUrls")
 		return nil
 	}
 
 	pipe := c.conn.Pipeline()
 
-	for _, url := range urls {
-		pipe.ZIncrBy(c.ctx, "urls", 1, url)
+	for _, u := range urls {
+		pipe.ZIncrBy(ctx, "urls", 1, u)
 	}
 
 	_, err := pipe.Exec(c.ctx)
 	if err != nil {
-		utils.Log.Cache().Debug("add URLs", "error", err)
 		return fmt.Errorf("add URLs: %w", err)
 	}
 
@@ -160,16 +197,13 @@ func (c *RedisClient) AddUrls(urls []string) error {
 }
 
 // AddToVisitedUrl adds a URL to the visitedUrls set.
-// Logs warnings for empty input and errors if Redis fails.
-func (c *RedisClient) AddToVisitedUrl(u string) error {
+func (c *RedisClient) MarkVisited(ctx context.Context, u string) error {
 	if u == "" {
-		utils.Log.Cache().Debug("empty URL passed to AddToVisitedUrl")
 		return nil
 	}
 
-	err := c.conn.SAdd(c.ctx, "visitedUrls", u).Err()
+	err := c.conn.SAdd(ctx, "visitedUrls", u).Err()
 	if err != nil {
-		utils.Log.Cache().Debug("add to visited URLs", "url", u, "error", err)
 		return fmt.Errorf("add to visited URLs: %w", err)
 	}
 
@@ -177,16 +211,14 @@ func (c *RedisClient) AddToVisitedUrl(u string) error {
 }
 
 // AddToWaitedHost adds a host key in Redis with a TTL corresponding to delay.
-// Logs warnings for empty input and errors for Redis failures.
-func (c *RedisClient) AddToWaitedHost(h string, delay int) {
+func (c *RedisClient) AddToWaitedHost(ctx context.Context, h string, delay int) error {
 	if h == "" {
-		utils.Log.Cache().Debug("empty host passed to AddToWaitedHost")
-		return
+		return fmt.Errorf("empty host cannot be added to waited hosts")
 	}
 
-	err := c.conn.Set(c.ctx, h, 1, time.Duration(delay)*time.Second).Err()
+	err := c.conn.Set(ctx, h, 1, time.Duration(delay)*time.Second).Err()
 	if err != nil {
-		utils.Log.Cache().Debug("add to waited host", "host", h, "error", err)
-		return
+		return fmt.Errorf("add to waited host: %w", err)
 	}
+	return nil
 }

@@ -1,4 +1,4 @@
-module spider
+module github.com/Hassan-ach/boogle/services/spider
 
 go 1.24.4
 

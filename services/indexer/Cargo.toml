@@ -9,5 +9,16 @@ tokio = { version = "1.0", features = ["full"] }
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "tls-rustls-ring-webpki", "uuid"] }
 uuid = { version = "1", features = ["v4"] }
 dotenv = "0.15"
-tracing = { version = "0.1", features = ["max_level_off"] }
-tracing-subscriber = { version = "0.3", features = ["fmt", "json", "ansi"] }
+anyhow = { version = "1.0", default-features = false }
+tokio-util = { version = "0.7", features = ["rt"] }
+slog = "2.8.2"
+slog-json = "2.6.1"
+slog-async = "2.8.0"
+slog-term = "2.9.2"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

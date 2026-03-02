@@ -9,24 +9,27 @@ import (
 	"github.com/joho/godotenv"
 )
 
+type RedisConfig struct {
+	Addr     string
+	Password string
+	DB       int
+	Port     int
+	Delay    int
+	MaxRetry int
+}
+
 type PSQLConfig struct {
-	Host            string
-	Port            int
-	User            string
-	Password        string
-	DBname          string
+	Host     string
+	Port     int
+	User     string
+	DBname   string
+	Password string
+
 	MaxOpenConns    int
 	MaxIdleConns    int
 	MaxConnLifetime time.Duration
-}
 
-type RedisConfig struct {
-	Addr     string
-	Port     int
-	DB       int
-	Password string
-	Delay    int
-	MaxRetry int
+	BatchSize int
 }
 
 type StoreConfig struct {
@@ -35,25 +38,39 @@ type StoreConfig struct {
 }
 
 type AppConfig struct {
-	MaxGoRoutines int
-	Timeout       time.Duration
+	MaxCrawlers        int
+	MaxConcurrentFetch int
+
+	LogsPath string
+
+	ClawlerDelay int
+
+	HttpTimeout    int
+	CrawlerTimeout int
 }
 
 type Config struct {
-	Store StoreConfig
 	App   AppConfig
+	Store StoreConfig
 }
 
 func LoadConfig(envPath string) (*Config, error) {
-	err := godotenv.Load(envPath)
+	var err error
+
+	if envPath == "" {
+		err = godotenv.Load()
+	} else {
+		err = godotenv.Load(envPath)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("Error loading .env file")
+		panic(fmt.Sprintf("Failed to load .env file: %v", err))
 	}
 
 	c := &Config{
 		App:   loadAppConfig(),
 		Store: loadStoreConfig(),
 	}
+}
 
 	fmt.Printf("%+v\n", c)
 
@@ -76,6 +93,7 @@ func loadDatabaseConfig() PSQLConfig {
 	maxOpenConns := getIntWithDefault("PG_MAX_OPEN_CONNS", 20)
 	maxIdleConns := getIntWithDefault("PG_MAX_IDLE_CONNS", 20)
 	maxConnLifetime := getIntWithDefault("PG_MAX_CONN_LIFETIME", 0)
+	batchSize := getIntWithDefault("PG_BATCH_SIZE", 30)
 
 	return PSQLConfig{
 		Host:            host,
@@ -86,6 +104,7 @@ func loadDatabaseConfig() PSQLConfig {
 		MaxOpenConns:    maxOpenConns,
 		MaxIdleConns:    maxIdleConns,
 		MaxConnLifetime: time.Second * time.Duration(maxConnLifetime),
+		BatchSize:       batchSize,
 	}
 }
 
@@ -108,11 +127,19 @@ func loadRedisConfig() RedisConfig {
 }
 
 func loadAppConfig() AppConfig {
-	maxGoRoutines := getIntWithDefault("MAX_GO_ROUTINES", 10)
-	timeout := getIntWithDefault("TIMEOUT", 30)
+	maxCrawlers := getIntWithDefault("MAX_CRAWLERS", 20)
+	httpTimeout := getIntWithDefault("HTTP_TIMEOUT", 60)
+	crawlerTimeout := getIntWithDefault("CRAWLER_TIMEOUT", 60)
+	maxConcurrentFetch := getIntWithDefault("MAX_CONCURRENT_FETCH", 200)
+	logsPath := getWithDefault("LOGS_PATH", "./logs.json")
+	clawlerDelay := getIntWithDefault("CRAWLER_DELAY", 200)
 	return AppConfig{
-		MaxGoRoutines: maxGoRoutines,
-		Timeout:       time.Second * time.Duration(timeout),
+		MaxCrawlers:        maxCrawlers,
+		CrawlerTimeout:     crawlerTimeout,
+		HttpTimeout:        httpTimeout,
+		MaxConcurrentFetch: maxConcurrentFetch,
+		LogsPath:           logsPath,
+		ClawlerDelay:       clawlerDelay,
 	}
 }
 

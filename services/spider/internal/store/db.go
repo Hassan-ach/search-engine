@@ -10,17 +10,17 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"spider/internal/config"
-	"spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
 )
 
 type SQLClient struct {
 	conn *sql.DB
-	ctx  context.Context
 }
 
 // NewDbClient creates and returns a PostgreSQL DB client.
-func NewDbClient(ctx context.Context, conf *config.PSQLConfig) *SQLClient {
+func NewDbClient(conf config.PSQLConfig) *SQLClient {
+	// fix this connection string construction
 	psqlconn := fmt.Sprintf(
 		"host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
 		conf.Host,
@@ -52,23 +52,47 @@ func NewDbClient(ctx context.Context, conf *config.PSQLConfig) *SQLClient {
 	fmt.Println("Data Base Connectd")
 
 	return &SQLClient{
-		conn: db, ctx: ctx,
+		conn: db,
 	}
 }
 
-// Page stores a crawled page in the "pages" table.
-func (c *SQLClient) InsertPage(page entity.Page) error {
-	tx, err := c.conn.Begin()
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer tx.Rollback()
+func (c *SQLClient) Close() {
+	_ = c.conn.Close()
+}
 
+// WithTx executes a function within a database transaction.
+func (c *SQLClient) WithTx(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	tx, err := c.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+
+	if err := fn(tx); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Page stores a crawled page in the "pages" table.
+func (c *SQLClient) InsertPage(ctx context.Context, tx *sql.Tx, page *entity.Page) error {
 	var url_id string
-	err = c.conn.QueryRowContext(c.ctx,
-		`INSERT INTO urls(url) VALUES ($1) 
-				ON CONFLICT (url) DO UPDATE SET url = urls.url
-				RETURNING id`,
+	err := tx.QueryRowContext(ctx,
+		`WITH ins AS (
+		    INSERT INTO urls(url)
+		    VALUES ($1)
+		    ON CONFLICT (url) DO NOTHING
+		    RETURNING id
+		)
+		SELECT id FROM ins
+		UNION ALL
+		SELECT id FROM urls WHERE url = $1
+		LIMIT 1;`,
 		page.URL).Scan(&url_id)
 	if err != nil {
 		return fmt.Errorf("upsert url: %w", err)
@@ -79,8 +103,9 @@ func (c *SQLClient) InsertPage(page entity.Page) error {
 		return fmt.Errorf("marshal metadata: %w", err)
 	}
 
-	_, err = c.conn.Exec(
-		`INSERT INTO pages(url_id, html, metadata) VALUES ($1,$2,$3)`,
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO pages(url_id, html, metadata) VALUES ($1,$2,$3)
+			ON CONFLICT (url_id) DO NOTHING`,
 		url_id,
 		page.HTML,
 		metadata,
@@ -89,12 +114,17 @@ func (c *SQLClient) InsertPage(page entity.Page) error {
 		return fmt.Errorf("insert page : %w", err)
 	}
 
-	return tx.Commit()
+	return nil
 }
 
 // InsertGraphEdges from page id → many page ids
 // - batch-inserts edges using IDs
-func (c *SQLClient) InsertGraphEdges(from_url_id string, to_url_ids []string) error {
+func (c *SQLClient) InsertGraphEdges(
+	ctx context.Context,
+	tx *sql.Tx,
+	from_url_id string,
+	to_url_ids []string,
+) error {
 	if len(to_url_ids) == 0 {
 		return nil
 	}
@@ -113,7 +143,7 @@ func (c *SQLClient) InsertGraphEdges(from_url_id string, to_url_ids []string) er
 		strings.Join(placeholders, ", ") +
 		` ON CONFLICT DO NOTHING`
 
-	_, err := c.conn.ExecContext(c.ctx, query, args...)
+	_, err := tx.ExecContext(ctx, query, args...)
 	if err != nil {
 		return fmt.Errorf("batch insert graph_edges: %w", err)
 	}
@@ -122,7 +152,7 @@ func (c *SQLClient) InsertGraphEdges(from_url_id string, to_url_ids []string) er
 }
 
 // InsertURLs inserts or gets existing IDs — returns []string [from_url_id, to_url_ids...]
-func (c *SQLClient) InsertURLs(urls []string) ([]string, error) {
+func (c *SQLClient) InsertURLs(ctx context.Context, tx *sql.Tx, urls []string) ([]string, error) {
 	if len(urls) == 0 {
 		return make([]string, 0), nil
 	}
@@ -142,7 +172,7 @@ func (c *SQLClient) InsertURLs(urls []string) ([]string, error) {
 		ins AS (
 		    INSERT INTO urls (url)
 		    SELECT url FROM input
-		    ON CONFLICT (url) DO NOTHING
+			ON CONFLICT (url) DO NOTHING
 		    RETURNING id, url
 		)
 		SELECT u.id
@@ -150,11 +180,11 @@ func (c *SQLClient) InsertURLs(urls []string) ([]string, error) {
 		JOIN urls u ON u.url = i.url
 		`, strings.Join(values, ","))
 
-	rows, err := c.conn.QueryContext(c.ctx, query, args...)
+	rows, err := tx.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("batch upsert query failed: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	m := make([]string, 0, len(urls))
 
@@ -170,9 +200,9 @@ func (c *SQLClient) InsertURLs(urls []string) ([]string, error) {
 		return nil, err
 	}
 
-	if len(m) != len(urls) {
-		return nil, fmt.Errorf("got %d ids back, expected %d", len(m), len(urls))
-	}
+	// if len(m) != len(urls) {
+	// 	return nil, fmt.Errorf("got %d ids back, expected %d", len(m), len(urls))
+	// }
 
 	return m, nil
 }

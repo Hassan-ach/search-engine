@@ -6,28 +6,30 @@ import (
 	"os/signal"
 	"syscall"
 
-
-	"spider/internal/crawler"
-	"spider/internal/store"
-	"spider/internal/utils"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/spider"
 )
 
+type Spider struct {
+	Config *config.Config
+}
+
 func main() {
+	conf, err := config.LoadConfig("")
+	if err != nil {
+		panic(fmt.Sprintf("Failed to load config: %v", err))
+	}
+
+	spider := spider.NewSpider(conf)
 	defer func() {
-		utils.Log.Close()
-		store.Cache.Close()
-		store.DB.Close()
+		spider.Close()
 	}()
 
 	sigs := make(chan os.Signal, 1)
-
 	signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
-
-	fmt.Println("Starting...")
-	go crawler.Run([]string{"https://en.wikipedia.org/wiki/Hairy_ball_theorem"})
+	go spider.Start([]string{"https://en.wikipedia.org/wiki/Hairy_ball_theorem"})
 	<-sigs
 	fmt.Println("Exiting gracefully")
-	crawler.Working = false
-	crawler.WG.Wait()
-	store.WG.Wait()
+
+	spider.Stop()
 }
