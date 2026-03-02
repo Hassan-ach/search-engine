@@ -1,0 +1,90 @@
+package component
+import "query-engine/internal/model"
+import "strings"
+import "fmt"
+import "net/url"
+
+templ PageCard(page *model.Page) {
+    <article class="card-article" x-data="{ expanded: false }">
+        <div class="flex items-center gap-2 mb-1">
+        <div class="card-favicon">
+        if len(page.MetaData.Icons) > 0 {
+            <img src={getIcon(page)} alt="favicon" class="w-4 h-4 object-contain" />
+        }else{
+             {string(page.URL[0])}
+        }
+        </div>
+            <span class="text-sm text-gray-700">{ getDomain(page.URL) }</span>
+        </div>
+
+        <h2 class="mb-1">
+            <a href={ templ.URL(page.URL) } class="card-link-title" target="_blank" rel="noopener">
+                { getTitle(page) }
+            </a>
+        </h2>
+
+        <p class="card-description">{ getDescription(page) }</p>
+
+        <button @click="expanded = !expanded" class="flex items-center gap-1 text-s text-gray-500 hover:text-gray-700">
+            <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 9l-7 7-7-7" stroke-width="2"/></svg>
+            <span x-text="expanded ? 'Less' : 'More'"></span>
+        </button>
+
+        <div x-show="expanded" class="mt-3 p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <div class="text-s text-gray-600 space-y-1">
+                <p><strong>Full URL:</strong> { page.URL }</p>
+            </div>
+            <div class="text-s text-gray-600 space-y-1" x-show={len(page.MetaData.Keywords) > 0}>
+                <p><strong>Keywords:</strong> {getKeywords(page)}</p>
+            </div>
+        </div>
+    </article>
+}
+
+
+func getTitle(page *model.Page) string {
+    if page.MetaData.Title != "" {
+        return page.MetaData.Title
+    }
+    return page.URL
+}
+
+func getDescription(page *model.Page) string {
+    if page.MetaData.Description == "" {
+        return "No description available for this page."
+    }
+    if len(page.MetaData.Description) > 200 {
+        return page.MetaData.Description[:200] + "..."
+    }
+    return page.MetaData.Description
+}
+
+func getKeywords(page *model.Page) string {
+    if len(page.MetaData.Keywords) == 0 {
+        return "No keywords available."
+    }
+    return strings.Join(page.MetaData.Keywords, ", ")
+}
+
+func getIcon(page *model.Page) string {
+    iconURL := page.MetaData.Icons[0]
+
+    if strings.HasPrefix(iconURL, "http") {
+        return iconURL
+    }
+    domain := getDomain(page.URL)
+    if strings.HasPrefix(iconURL,domain ) {
+        return fmt.Sprintf("http://%s", iconURL)
+    }
+    return fmt.Sprintf("https://%s%s",domain, iconURL)
+}
+
+func getDomain(u string) string {
+    // Simple domain extraction
+    ur, err := url.Parse(u)
+    if err == nil && ur.Host != "" {
+        return strings.TrimPrefix(ur.Host, "www.")
+    }
+    return u
+}
+

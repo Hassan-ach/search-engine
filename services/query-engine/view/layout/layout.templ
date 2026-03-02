@@ -1,4 +1,3 @@
-// internal/views/layout/layout.templ
 package layout
 
 templ Base() {
@@ -9,12 +8,29 @@ templ Base() {
         <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
         <title>Boogle - Search Engine</title>
         <link rel="stylesheet" href="/public/css/styles.css"/>
+        <!-- Pixel Art Fonts -->
         <link rel="preconnect" href="https://fonts.googleapis.com"/>
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+        <link href="https://fonts.googleapis.com/css2?family=Jersey+10&family=VT323&display=swap" rel="stylesheet"/>
     </head>
-    <body class="bg-gray-50 text-gray-900 font-['Inter'] antialiased">
+    <body class="bg-[#0d0221] text-[#e0d5f5] font-['VT323']">
         { children... }
+
+        <!-- Footer -->
+        <footer class="border-t-2 border-[#3d2c5e] bg-[#1a0b2e]">
+            <div class="px-8 py-3 text-sm font-['VT323'] tracking-wider">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex gap-6">
+                        <a href="#" class="hover:text-[#00f5d4] hover:shadow-[0_0_5px_#00f5d4] transition-all">[ Help ]</a>
+                        <a href="#" class="hover:text-[#00f5d4] hover:shadow-[0_0_5px_#00f5d4] transition-all">[ Privacy ]</a>
+                        <a href="#" class="hover:text-[#00f5d4] hover:shadow-[0_0_5px_#00f5d4] transition-all">[ Terms ]</a>
+                    </div>
+                    <div class="text-[#6b5b95]">
+                        © 2026 BOOGLE_SEARCH.EXE
+                    </div>
+                </div>
+            </div>
+        </footer>
         <script src="/public/js/index.js" defer></script>
     </body>
     </html>

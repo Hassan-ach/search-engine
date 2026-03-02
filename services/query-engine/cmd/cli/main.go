@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -33,13 +34,19 @@ func main() {
 	// }
 	speller := mockSpeller{}
 
-	ranker := ranking.NewRankingService(&store, conf.Ranker)
+	ranker := ranking.NewRankingService(conf.Ranker)
 
 	query := speller.GetSuggestions(os.Args[1])
 	fmt.Printf("query: %s\n", query)
+	c, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
+	data, err := store.GetData(c, query, 0)
+	if err != nil {
+		fmt.Printf("err: %v", err)
+	}
 	s := time.Now()
-	pages, err := ranker.Rank(query, 0)
+	pages, err := ranker.Rank(data)
 	fmt.Printf("ranking took: %d ms\n", time.Since(s).Abs().Milliseconds())
 	if err != nil {
 		fmt.Printf("err: %v", err)

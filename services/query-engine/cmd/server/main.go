@@ -1,8 +1,6 @@
 package main
 
 import (
-	"fmt"
-
 	"query-engine/internal/config"
 	"query-engine/internal/handlers"
 	"query-engine/internal/service/ranking"
@@ -19,26 +17,26 @@ func main() {
 		panic("failed to load config: " + err.Error())
 	}
 
-	e := echo.New()
-	e.Use(middleware.RequestLogger())
-
 	store := store.NewStore(conf.Store)
 
 	speller, err := spellchecker.NewAspellSpellingService()
 	if err != nil {
 		panic("failed to initialize speller: " + err.Error())
 	}
-
-	ranker := ranking.NewRankingService(&store, conf.Ranker)
+	ranker := ranking.NewRankingService(conf.Ranker)
 
 	homeHandler := &handlers.HomeHandler{}
-	rankingHandler := handlers.NewSearchHandler(ranker, speller)
+	rankingHandler := handlers.NewSearchHandler(store, ranker, speller)
 
-	fmt.Printf("starting server on port 1323\n")
+	e := echo.New()
+	e.Use(middleware.RequestLogger())
 
 	e.Static("/public", "public")
 	e.GET("/", homeHandler.Handle)
 	e.GET("/search", rankingHandler.Handle)
+	e.GET("/feeling-lucky", func(c *echo.Context) error {
+		return c.String(200, "GOOD FOR YOU")
+	})
 
 	if err := e.Start(":1323"); err != nil {
 		e.Logger.Error("failed to start server", "error", err)
