@@ -1,6 +1,6 @@
 import logging
 import time
-from utils import get_connection, release_connection, retry_on_db_error
+from psql import get_connection, release_connection, retry_on_db_error
 
 logger = logging.getLogger(__name__)
 

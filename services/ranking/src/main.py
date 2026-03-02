@@ -2,8 +2,8 @@ import asyncio
 import json
 import logging
 import time
-from utils import get_graph_edges, persist_pagerank, NodeMapper
-from utils import initialize_connection_pool, close_connection_pool
+from psql import get_graph_edges, persist_pagerank, NodeMapper
+from psql import initialize_connection_pool, close_connection_pool
 from page_rank import pagerank
 from idf import idf
 from dotenv import load_dotenv
@@ -116,37 +116,37 @@ async def main():
         await run_pagerank()
         await run_idf()
 
-    scheduler = AsyncIOScheduler()
-
-    scheduler.add_job(
-       run_pagerank,
-       trigger=CronTrigger.from_crontab(pr_schedule),
-       id='pagerank_job',
-       name='PageRank Calculation',
-       max_instances=1,
-       replace_existing=True
-    )
-
-    scheduler.add_job(
-        run_idf,
-        trigger=CronTrigger.from_crontab(idf_schedule),
-        id="idf_job",
-        name="IDF Calculation",
-        max_instances=1,
-        replace_existing=True
-    )
-
-    scheduler.start()
-    logger.info(f"Scheduler started with PageRank schedule: '{pr_schedule}' and IDF schedule: '{idf_schedule}'")
-    
-    # Keep running forever
-    try:
-        while True:
-            await asyncio.sleep(3600)
-    except asyncio.CancelledError:
-        logger.info("Shutting down...")
-        scheduler.shutdown()
-        close_connection_pool()
+    # scheduler = AsyncIOScheduler()
+    #
+    # scheduler.add_job(
+    #    run_pagerank,
+    #    trigger=CronTrigger.from_crontab(pr_schedule),
+    #    id='pagerank_job',
+    #    name='PageRank Calculation',
+    #    max_instances=1,
+    #    replace_existing=True
+    # )
+    #
+    # scheduler.add_job(
+    #     run_idf,
+    #     trigger=CronTrigger.from_crontab(idf_schedule),
+    #     id="idf_job",
+    #     name="IDF Calculation",
+    #     max_instances=1,
+    #     replace_existing=True
+    # )
+    #
+    # scheduler.start()
+    # logger.info(f"Scheduler started with PageRank schedule: '{pr_schedule}' and IDF schedule: '{idf_schedule}'")
+    # 
+    # # Keep running forever
+    # try:
+    #     while True:
+    #         await asyncio.sleep(3600)
+    # except asyncio.CancelledError:
+    #     logger.info("Shutting down...")
+    #     scheduler.shutdown()
+    #     close_connection_pool()
 
 
 
