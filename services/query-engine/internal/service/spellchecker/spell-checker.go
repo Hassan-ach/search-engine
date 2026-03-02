@@ -35,8 +35,13 @@ func (s AspellSpeller) GetSuggestions(q string) []string {
 		}
 
 		sugs := s.speller.Suggest(word)
+		count := 0
 		for _, w := range sugs {
+			if count >= 3 {
+				break
+			}
 			suggestions[strings.ToLower(w)] = struct{}{}
+			count++
 		}
 	}
 
