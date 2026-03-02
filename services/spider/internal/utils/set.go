@@ -12,6 +12,12 @@ func NewSet[T comparable]() *Set[T] {
 	}
 }
 
+func NewSetFromSlice[T comparable](slice []T) *Set[T] {
+	s := NewSet[T]()
+	s.BatchAdd(slice...)
+	return s
+}
+
 func (s *Set[T]) Add(t T) bool {
 	_, ok := s.elements[t]
 	if ok {
