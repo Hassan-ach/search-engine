@@ -6,8 +6,8 @@ import (
 
 	"golang.org/x/net/html"
 
-	"spider/internal/entity"
-	"spider/internal/utils"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/utils"
 )
 
 type htmlCollector struct {

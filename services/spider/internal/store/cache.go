@@ -11,8 +11,8 @@ import (
 
 	"github.com/redis/go-redis/v9"
 
-	"spider/internal/config"
-	"spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
 )
 
 type RedisClient struct {

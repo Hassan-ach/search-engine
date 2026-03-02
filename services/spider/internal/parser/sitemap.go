@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"spider/internal/utils"
+	"github.com/Hassan-ach/boogle/services/spider/internal/utils"
 )
 
 type u struct {

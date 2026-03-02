@@ -10,11 +10,11 @@ import (
 	"sync"
 	"time"
 
-	"spider/internal/config"
-	"spider/internal/entity"
-	"spider/internal/parser"
-	"spider/internal/store"
-	"spider/internal/utils"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/parser"
+	"github.com/Hassan-ach/boogle/services/spider/internal/store"
+	"github.com/Hassan-ach/boogle/services/spider/internal/utils"
 )
 
 type Spider struct {

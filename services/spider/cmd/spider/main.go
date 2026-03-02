@@ -4,10 +4,9 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/spider"
 	"syscall"
-
-	"spider/internal/config"
-	"spider/internal/spider"
 )
 
 type Spider struct {
@@ -15,7 +14,7 @@ type Spider struct {
 }
 
 func main() {
-	conf, err := config.LoadConfig("../../.env")
+	conf, err := config.LoadConfig("")
 	if err != nil {
 		panic(fmt.Sprintf("Failed to load config: %v", err))
 	}

@@ -6,9 +6,9 @@ import (
 	"fmt"
 	"log/slog"
 
-	"spider/internal/config"
-	"spider/internal/entity"
-	"spider/internal/utils"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/utils"
 )
 
 type Cache interface {

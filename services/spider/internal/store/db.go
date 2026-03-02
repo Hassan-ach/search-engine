@@ -10,8 +10,8 @@ import (
 
 	_ "github.com/lib/pq"
 
-	"spider/internal/config"
-	"spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/config"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
 )
 
 type SQLClient struct {

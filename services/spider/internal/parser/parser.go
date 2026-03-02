@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"spider/internal/entity"
-	"spider/internal/utils"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/utils"
 
 	"golang.org/x/net/html"
 )

@@ -3,7 +3,7 @@ package parser
 import (
 	"strings"
 
-	"spider/internal/entity"
+	"github.com/Hassan-ach/boogle/services/spider/internal/entity"
 
 	"golang.org/x/net/html"
 )
