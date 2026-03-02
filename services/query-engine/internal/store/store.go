@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 
+	"query-engine/internal/apperror"
 	"query-engine/internal/config/store"
 	"query-engine/internal/model"
 	"query-engine/internal/util"
@@ -93,7 +94,7 @@ func (s PsqlStore) GetData(c context.Context, words []string, pageNum int) (*Dat
 		pageNum*s.conf.PageSize,
 	)
 	if err != nil {
-		return nil, fmt.Errorf("failed to execute query: %w", err)
+		return nil, apperror.Internal(fmt.Errorf("failed to execute query: %w", err))
 	}
 	defer rows.Close()
 
@@ -115,17 +116,21 @@ func (s PsqlStore) GetData(c context.Context, words []string, pageNum int) (*Dat
 
 		err := rows.Scan(&id, &url, &prScore, &metadata, &word_count, &word_set)
 		if err != nil {
-			return nil, fmt.Errorf("failed to scan data: %w", err)
+			return nil, apperror.Internal(fmt.Errorf("failed to scan data: %w", err))
 		}
 
 		err = json.Unmarshal(metadata, &meta)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal metadata for url %s: %w", url, err)
+			return nil, apperror.Internal(
+				fmt.Errorf("failed to unmarshal metadata for url %s: %w", url, err),
+			)
 		}
 
 		err = json.Unmarshal(word_set, &wordSet)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal word set for url %s: %w", url, err)
+			return nil, apperror.Internal(
+				fmt.Errorf("failed to unmarshal word set for url %s: %w", url, err),
+			)
 		}
 		page := &model.Page{
 			ID:       id,
@@ -172,7 +177,7 @@ func (s PsqlStore) GetTotalPages(c context.Context, query []string) (int, error)
 	var total int
 	err := s.conn.QueryRowContext(c, sql, pq.Array(query)).Scan(&total)
 	if err != nil {
-		return 0, fmt.Errorf("failed to get total pages: %w", err)
+		return 0, apperror.Internal(fmt.Errorf("failed to get total pages: %w", err))
 	}
 	return total, nil
 }
