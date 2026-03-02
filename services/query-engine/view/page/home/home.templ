@@ -5,8 +5,7 @@ import "query-engine/view/component"
 
 templ Show() {
     @layout.Base(){
-        <div class="min-h-screen flex flex-col">
-            <main class="hero-main">
+        <main class="hero-main">
                 <div class="mb-8 text-center" x-data="{ hovered: false }">
                     <h1 class="text-9xl font-bold mb-2 transition-all duration-300 jersey-10-regular ">
                         @component.Logo()
@@ -45,7 +44,6 @@ templ Show() {
                         <button class="btn-hero" hx-get="/feeling-lucky" >I'm Feeling Lucky</button>
                     </div>
                 </div>
-            </main>
-        </div>
+        </main>
     }
 }

@@ -6,16 +6,21 @@ import "query-engine/view/component"
 import "query-engine/view/page/result/tab"
 
 templ ShowAll(pages []*model.Page, totalPages, curentPage int,  isHtmx bool) {
-    @layout.Base(){
+    if !isHtmx {
+        @layout.Base(){
+            <div class="page-wrapper">
+                @component.ResultHeader()
+                @tab.All(pages)
+            </div>
+
+        }
+    }else {
         <div class="page-wrapper">
-        if !isHtmx {
-            @component.ResultHeader()
-        }
-        @tab.All(pages)
-        if len(pages) > 0 {
-            @component.Pagination(totalPages,curentPage)
-        }
+            @tab.All(pages)
         </div>
+    }
+    if len(pages) > 0 {
+        @component.Pagination(totalPages,curentPage)
     }
 }
 

@@ -232,7 +232,6 @@ body::before {
 
     /* Page Layout */
     .page-wrapper {
-        @apply min-h-screen;
         background-color: var(--bg-primary);
     }
 
