@@ -33,7 +33,6 @@ open http://localhost:1323
 
 ## Docs
 
-- [Architecture Review](REVIEW.md) - Complete analysis
 - [Services Overview](services/README.md) - Service details
 - [docs/](docs/) - Detailed documentation for each service
 
@@ -43,5 +42,5 @@ See individual service READMEs in [services/](services/) directory.
 
 ---
 
-**Status**: Learning project - not for production  
+**Status**: Learning project - not for production
 **License**: MIT

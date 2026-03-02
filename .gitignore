@@ -3,14 +3,12 @@
 .DS_Store
 .idea/
 .vscode/
-docs/
 data/
 .scannerwork/
 *.log
 .env
 *.html
 *.svg
-*.md
 *.txt
 *.png
 *.json
