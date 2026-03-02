@@ -37,6 +37,9 @@ func NewStore(conf store.StoreConfig) PsqlStore {
 		conf.DB.Host, conf.DB.Port, conf.DB.User, conf.DB.Password, conf.DB.DBName)
 
 	conn, err := sql.Open("postgres", urls)
+	if err != nil {
+		panic(fmt.Sprintf("Failed to open database connection: %v", err))
+	}
 
 	err = conn.Ping()
 	if err != nil {
@@ -96,7 +99,7 @@ func (s PsqlStore) GetData(c context.Context, words []string, pageNum int) (*Dat
 	if err != nil {
 		return nil, apperror.Internal(fmt.Errorf("failed to execute query: %w", err))
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	wordIdf := make(map[string]float64, len(words))
 	pgs := make([]*model.Page, 0, s.conf.PageSize)

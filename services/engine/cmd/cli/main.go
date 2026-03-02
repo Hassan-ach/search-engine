@@ -25,7 +25,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	conf, err := config.LoadConfig("../../.env")
+	conf, err := config.LoadConfig("")
+	if err != nil {
+		panic("failed to load config: " + err.Error())
+	}
 	store := store.NewStore(conf.Store)
 
 	// speller, err := service.NewAspellSpellingService()

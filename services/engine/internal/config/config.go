@@ -15,9 +15,14 @@ type Config struct {
 }
 
 func LoadConfig(envPath string) (*Config, error) {
-	err := godotenv.Load(envPath)
+	var err error
+	if envPath == "" {
+		err = godotenv.Load()
+	} else {
+		err = godotenv.Load(envPath)
+	}
 	if err != nil {
-		return nil, fmt.Errorf("Error loading .env file")
+		return nil, fmt.Errorf("error loading .env file")
 	}
 
 	c := &Config{
