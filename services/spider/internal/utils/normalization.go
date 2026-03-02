@@ -210,15 +210,9 @@ func CheckURLExists(rawURL string) bool {
 	if err != nil {
 		return false
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	return resp.StatusCode >= 200 && resp.StatusCode < 400
-}
-
-func skipNonEnglishSubdomains(u *url.URL) {
-	if strings.Contains(u.Host, "wikipedia.org") && !strings.HasPrefix(u.Host, "en.") {
-		u.Host = "en.wikipedia.org"
-	}
 }
 
 func ValidateLinks(links []string, disallowed []string) []string {

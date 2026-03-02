@@ -57,7 +57,7 @@ func NewDbClient(conf config.PSQLConfig) *SQLClient {
 }
 
 func (c *SQLClient) Close() {
-	c.conn.Close()
+	_ = c.conn.Close()
 }
 
 // WithTx executes a function within a database transaction.
@@ -68,7 +68,7 @@ func (c *SQLClient) WithTx(ctx context.Context, fn func(tx *sql.Tx) error) error
 	}
 
 	if err := fn(tx); err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		return err
 	}
 
@@ -184,7 +184,7 @@ func (c *SQLClient) InsertURLs(ctx context.Context, tx *sql.Tx, urls []string) (
 	if err != nil {
 		return nil, fmt.Errorf("batch upsert query failed: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	m := make([]string, 0, len(urls))
 

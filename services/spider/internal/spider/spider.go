@@ -132,6 +132,10 @@ func (s *Spider) crawl(crawler_id int) {
 	}
 
 	host, ok, err := s.store.GetHostMetaData(ctx, u.Host)
+	if err != nil {
+		s.logger.Warn("Failed to retrieve host metadata from store, will attempt to generate",
+			"host", u.Host, "error", err)
+	}
 	if !ok {
 		logger.Info("Host metadata not found in store, generating new metadata",
 			"host", u.Host)
@@ -261,8 +265,14 @@ func (s *Spider) newHostMetaData(ctx context.Context, raw string) (host *entity.
 
 	// persist in store
 	cache := s.store.GetCache()
-	cache.AddHostMetaData(ctx, host.Name, host)
-	cache.AddUrls(ctx, sitemaps)
+	err = cache.AddHostMetaData(ctx, host.Name, host)
+	if err != nil {
+		s.logger.Error("Failed to store host metadata in cache", "error", err)
+	}
+	err = cache.AddUrls(ctx, sitemaps)
+	if err != nil {
+		s.logger.Error("Failed to add sitemap URLs to cache", "error", err)
+	}
 
 	return host, nil
 }

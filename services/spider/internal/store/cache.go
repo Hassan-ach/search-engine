@@ -53,7 +53,7 @@ func NewRedisClient(conf config.RedisConfig) *RedisClient {
 }
 
 func (c *RedisClient) Close() {
-	c.conn.Close()
+	_ = c.conn.Close()
 }
 
 // AddHostMetaData serializes a Host struct with gob and stores it in Redis.
@@ -156,7 +156,7 @@ func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 	`)
 
 	var err error
-	var val interface{}
+	var val any
 	for i := 0; i < c.maxRetry; i++ {
 		val, err = script.Run(ctx, c.conn, []string{"urls", "visitedUrls"}).Result()
 		if err != nil {

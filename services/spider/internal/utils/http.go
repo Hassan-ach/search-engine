@@ -36,7 +36,7 @@ func GetReq(
 
 		statusCode := res.StatusCode
 		if statusCode >= 500 || statusCode == 429 {
-			res.Body.Close()
+			_ = res.Body.Close()
 			continue
 		}
 		if statusCode >= 400 {
@@ -44,7 +44,7 @@ func GetReq(
 		}
 
 		body, err := io.ReadAll(io.LimitReader(res.Body, 10<<20)) // 10 MB
-		res.Body.Close()
+		_ = res.Body.Close()
 		if err != nil {
 			err = fmt.Errorf("failed to read response: %w", err)
 			continue

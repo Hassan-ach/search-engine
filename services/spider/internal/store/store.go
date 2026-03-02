@@ -51,28 +51,27 @@ func (s *Store) GetCache() Cache {
 	return s.cache
 }
 
-func (s *Store) Persist(ctx context.Context, page *entity.Page, host *entity.Host) error {
-	s.log.Info("Persisting page and host metadata", "url", page.MetaData.URL, "host", host.Name)
+func (s *Store) Persist(ctx context.Context, page *entity.Page, host *entity.Host) {
+	s.log.Info("Persisting page and host metadata", "url", page.URL, "host", host.Name)
 	s.persistHost(ctx, host)
 	err := s.persistPage(ctx, page)
 	if err != nil {
-		s.log.Error("persist page data", "url", page.MetaData.URL, "error", err)
-		return err
+		s.log.Error("persist page data", "url", page.URL, "error", err)
+		return
 	}
-	return nil
 }
 
 func (s *Store) persistPage(ctx context.Context, page *entity.Page) error {
-	s.log.Info("Persisting page data", "url", page.MetaData.URL)
+	s.log.Info("Persisting page data", "url", page.URL)
 
 	if err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		if err := s.db.InsertPage(ctx, tx, page); err != nil {
-			s.log.Error("insert page into database", "url", page.MetaData.URL, "err", err)
+			s.log.Error("insert page into database", "url", page.URL, "err", err)
 			return fmt.Errorf("insert page: %w", err)
 		}
 		return nil
 	}); err != nil {
-		s.log.Warn("failed to persist page", "url", page.MetaData.URL, "err", err)
+		s.log.Warn("failed to persist page", "url", page.URL, "err", err)
 		return fmt.Errorf("persist page in database: %w", err)
 	}
 
@@ -80,7 +79,7 @@ func (s *Store) persistPage(ctx context.Context, page *entity.Page) error {
 		ids, err := s.db.InsertURLs(
 			ctx,
 			tx,
-			append([]string{page.MetaData.URL}, page.Links...),
+			append([]string{page.URL}, page.Links...),
 		)
 		if err != nil {
 			return fmt.Errorf("insert URLs into database: %w", err)
@@ -91,17 +90,17 @@ func (s *Store) persistPage(ctx context.Context, page *entity.Page) error {
 		}
 		return nil
 	}); err != nil {
-		s.log.Warn("", "url", page.MetaData.URL, "err", err)
+		s.log.Warn("", "url", page.URL, "err", err)
 		return err
 	}
-	err := s.cache.MarkVisited(ctx, page.MetaData.URL)
+	err := s.cache.MarkVisited(ctx, page.URL)
 	if err != nil {
-		s.log.Warn("add URL to visited set", "url", page.MetaData.URL, "error", err)
+		s.log.Warn("add URL to visited set", "url", page.URL, "error", err)
 		return err
 	}
 	err = s.cache.AddUrls(ctx, page.Links)
 	if err != nil {
-		s.log.Warn("add linked URLs to cache", "url", page.MetaData.URL, "error", err)
+		s.log.Warn("add linked URLs to cache", "url", page.URL, "error", err)
 	}
 	return nil
 }

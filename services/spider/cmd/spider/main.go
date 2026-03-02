@@ -4,9 +4,10 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"syscall"
+
 	"github.com/Hassan-ach/boogle/services/spider/internal/config"
 	"github.com/Hassan-ach/boogle/services/spider/internal/spider"
-	"syscall"
 )
 
 type Spider struct {

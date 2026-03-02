@@ -6,6 +6,7 @@ import (
 	"log"
 	"log/slog"
 	"os"
+	"strings"
 )
 
 const (
@@ -46,19 +47,19 @@ func (h *SimpleTextHandler) Handle(_ context.Context, r slog.Record) error {
 	msg := r.Message
 
 	// include handler's stored attrs first
-	attrStr := ""
+	var attrStr strings.Builder
 	for _, a := range h.attrs {
-		attrStr += fmt.Sprintf(" %s=%v", a.Key, a.Value)
+		fmt.Fprintf(&attrStr, " %s=%v", a.Key, a.Value)
 	}
 
 	// then record's attrs
 	r.Attrs(func(a slog.Attr) bool {
-		attrStr += fmt.Sprintf(" %s=%v", a.Key, a.Value)
+		fmt.Fprintf(&attrStr, " %s=%v", a.Key, a.Value)
 		return true
 	})
 
-	fmt.Fprintf(os.Stdout, "%s%s%s %q%s\n",
-		levelColor, level, colorReset, msg, attrStr,
+	_, _ = fmt.Fprintf(os.Stdout, "%s%s%s %q%s\n",
+		levelColor, level, colorReset, msg, attrStr.String(),
 	)
 	return nil
 }
@@ -91,7 +92,7 @@ func NewMultiLogger(fileName string) *Logger {
 }
 
 func (l *Logger) Close() {
-	l.file.Close()
+	_ = l.file.Close()
 }
 
 func (m MultiHandler) Enabled(ctx context.Context, l slog.Level) bool {
