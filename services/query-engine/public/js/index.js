@@ -1,11 +1,27 @@
 (() => {
+  var __defProp = Object.defineProperty;
+  var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
   var __getOwnPropNames = Object.getOwnPropertyNames;
+  var __hasOwnProp = Object.prototype.hasOwnProperty;
   var __esm = (fn, res) => function __init() {
     return fn && (res = (0, fn[__getOwnPropNames(fn)[0]])(fn = 0)), res;
   };
   var __commonJS = (cb, mod) => function __require() {
     return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
   };
+  var __export = (target, all) => {
+    for (var name in all)
+      __defProp(target, name, { get: all[name], enumerable: true });
+  };
+  var __copyProps = (to, from, except, desc) => {
+    if (from && typeof from === "object" || typeof from === "function") {
+      for (let key of __getOwnPropNames(from))
+        if (!__hasOwnProp.call(to, key) && key !== except)
+          __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
+    }
+    return to;
+  };
+  var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
   // node_modules/alpinejs/dist/module.esm.js
   function scheduler(callback) {
@@ -3410,6 +3426,10 @@ ${expression ? 'Expression: "' + expression + '"\n\n' : ""}`, el);
   });
 
   // node_modules/htmx.org/dist/htmx.esm.js
+  var htmx_esm_exports = {};
+  __export(htmx_esm_exports, {
+    default: () => htmx_esm_default
+  });
   var htmx2, htmx_esm_default;
   var init_htmx_esm = __esm({
     "node_modules/htmx.org/dist/htmx.esm.js"() {
@@ -7080,66 +7100,12 @@ ${expression ? 'Expression: "' + expression + '"\n\n' : ""}`, el);
   var require_main = __commonJS({
     "static/js/main.js"() {
       init_module_esm();
-      init_htmx_esm();
       window.Alpine = module_default;
-      window.htmx = htmx_esm_default;
+      window.htmx = (init_htmx_esm(), __toCommonJS(htmx_esm_exports));
       document.addEventListener("DOMContentLoaded", () => {
         module_default.start();
       });
-      document.addEventListener("htmx:beforeRequest", function(event) {
-        const target = event.detail.target;
-        if (target) {
-          target.classList.add("htmx-loading");
-        }
-      });
-      document.addEventListener("htmx:afterRequest", function(event) {
-        const target = event.detail.target;
-        if (target) {
-          target.classList.remove("htmx-loading");
-        }
-      });
-      document.addEventListener("keydown", function(event) {
-        if (event.key === "/" && !["INPUT", "TEXTAREA"].includes(document.activeElement.tagName)) {
-          event.preventDefault();
-          const searchInput = document.querySelector('input[name="query"]');
-          if (searchInput) {
-            searchInput.focus();
-          }
-        }
-      });
-      document.querySelectorAll('a[href^="#"]').forEach((anchor) => {
-        anchor.addEventListener("click", function(e) {
-          const href = this.getAttribute("href");
-          if (href !== "#") {
-            e.preventDefault();
-            const target = document.querySelector(href);
-            if (target) {
-              target.scrollIntoView({
-                behavior: "smooth"
-              });
-            }
-          }
-        });
-      });
-      function createRipple(event) {
-        const button = event.currentTarget;
-        const ripple = document.createElement("span");
-        const diameter = Math.max(button.clientWidth, button.clientHeight);
-        const radius = diameter / 2;
-        ripple.style.width = ripple.style.height = `${diameter}px`;
-        ripple.style.left = `${event.clientX - button.offsetLeft - radius}px`;
-        ripple.style.top = `${event.clientY - button.offsetTop - radius}px`;
-        ripple.classList.add("ripple");
-        const existingRipple = button.querySelector(".ripple");
-        if (existingRipple) {
-          existingRipple.remove();
-        }
-        button.appendChild(ripple);
-      }
-      document.querySelectorAll(".btn-ripple").forEach((button) => {
-        button.addEventListener("click", createRipple);
-      });
-      console.log("\u{1F50D} Boogle Search Engine initialized");
+      console.log("Boogle Search Engine initialized");
     }
   });
   require_main();
