@@ -1,9 +1,9 @@
 package result
 
-import "query-engine/internal/model"
-import "query-engine/view/layout"
-import "query-engine/view/component"
-import "query-engine/view/page/result/tab"
+import "github.com/Hassan-ach/boogle/services/engine/internal/model"
+import "github.com/Hassan-ach/boogle/services/engine/view/layout"
+import "github.com/Hassan-ach/boogle/services/engine/view/component"
+import "github.com/Hassan-ach/boogle/services/engine/view/page/result/tab"
 
 templ ShowAll(pages []*model.Page, totalPages, curentPage int,  isHtmx bool) {
     if !isHtmx {
