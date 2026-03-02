@@ -1,0 +1,40 @@
+default: dev
+
+templ-generate:
+    templ generate
+
+templ-watch:
+    templ generate --watch
+
+tailwind-build:
+    npx tailwindcss -i ./static/css/input.css -o ./public/css/styles.css
+
+tailwind-build-prod:
+    npx tailwindcss -i ./static/css/input.css -o ./public/css/styles.css --minify
+
+tailwind-watch:
+    npx tailwindcss -i ./static/css/input.css -o ./public/css/styles.css --watch
+
+js-build:
+    npx esbuild ./static/js/main.js --bundle --sourcemap --outfile=public/js/index.js
+
+js-prod:
+    npx esbuild ./static/js/main.js --bundle --minify --outfile=public/js/index.js
+
+js-watch:
+    npx esbuild ./static/js/main.js --bundle --sourcemap --outfile=public/js/index.js --watch
+
+dev: templ-generate tailwind-build js-build
+    air
+
+build: templ-generate tailwind-build-prod js-prod
+    go build -o ./bin/main ./cmd/server/main.go
+
+cli query:
+    go run cmd/cli/main.go "{{query}}"
+
+tidy:
+    go mod tidy
+
+build-emb: tailwind-build-prod js-prod templ-generate
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o boogle ./cmd/server

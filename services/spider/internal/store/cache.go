@@ -35,7 +35,6 @@ func NewRedisClient(conf config.RedisConfig) *RedisClient {
 		WriteTimeout: 5 * time.Second,
 	})
 
-	// Ping to ensure Redis connection is alive
 	_, err := client.Ping(context.Background()).Result()
 	if err != nil {
 		log.Fatalf("Failed to connected to redis ERROR: %v", err)
@@ -171,7 +170,7 @@ func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 			err = fmt.Errorf("script returned non-string or empty value: %v", val)
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(time.Duration(c.delay) * time.Millisecond)
 	}
 
 	return "", false, fmt.Errorf("no valid URL after %d retries err: %w", c.maxRetry, err)
@@ -189,7 +188,7 @@ func (c *RedisClient) AddUrls(ctx context.Context, urls []string) error {
 		pipe.ZIncrBy(ctx, "urls", 1, u)
 	}
 
-	_, err := pipe.Exec(ctx)
+	_, err := pipe.Exec(c.ctx)
 	if err != nil {
 		return fmt.Errorf("add URLs: %w", err)
 	}

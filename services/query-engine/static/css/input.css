@@ -1,0 +1,440 @@
+/* Tailwind CSS v4 Configuration */
+@import "tailwindcss";
+@font-face {
+    font-family: "Jersey10";
+    src: url("/static/fonts/Jersey10-Regular.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+@font-face {
+    font-family: "VT323";
+    src: url("/static/fonts/VT323.woff2") format("woff2");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Pixel Art Dark Theme - Purple & Deep Blue Palette */
+:root {
+    --bg-primary: #0d0221;
+    --bg-secondary: #1a0b2e;
+    --bg-card: #241b35;
+    --bg-hover: #2d2244;
+    --accent-purple: #9d4edd;
+    --accent-blue: #3a86ff;
+    --accent-cyan: #00f5d4;
+    --accent-pink: #ff006e;
+    --text-primary: #e0d5f5;
+    --text-secondary: #a89cc8;
+    --text-muted: #6b5b95;
+    --border-color: #3d2c5e;
+    --glow-purple: 0 0 10px rgba(157, 78, 221, 0.5);
+    --glow-blue: 0 0 10px rgba(58, 134, 255, 0.5);
+}
+
+/* CRT Scanline Effect */
+html {
+    scroll-behavior: smooth;
+    background-color: var(--bg-primary);
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+}
+
+body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: "VT323", "Courier New", monospace;
+    position: relative;
+}
+
+/* CRT Overlay Effect */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(
+        rgba(18, 16, 16, 0) 50%,
+        rgba(0, 0, 0, 0.25) 50%
+    );
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.15;
+}
+
+/* Pixel Art Animations */
+@keyframes pixelFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(8px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes pixelSlideIn {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes pixelGlow {
+    0%,
+    100% {
+        box-shadow:
+            0 0 5px var(--accent-purple),
+            0 0 10px var(--accent-purple);
+    }
+    50% {
+        box-shadow:
+            0 0 15px var(--accent-blue),
+            0 0 20px var(--accent-blue);
+    }
+}
+
+@keyframes cursorBlink {
+    0%,
+    100% {
+        opacity: 1;
+    }
+    50% {
+        opacity: 0;
+    }
+}
+
+@keyframes scanline {
+    0% {
+        transform: translateY(-100%);
+    }
+    100% {
+        transform: translateY(100%);
+    }
+}
+
+/* Utility Classes */
+.animate-pixel-fade {
+    animation: pixelFadeIn 0.3s steps(3) forwards;
+}
+
+.animate-pixel-slide {
+    animation: pixelSlideIn 0.4s steps(4) forwards;
+}
+
+.animate-glow {
+    animation: pixelGlow 2s infinite;
+}
+
+/* Typography - Pixel Fonts */
+.jersey-10-regular {
+    font-family: "Jersey10", "VT323";
+    font-weight: 400;
+    font-style: normal;
+    text-shadow: 2px 2px 0px var(--bg-secondary);
+    letter-spacing: 2px;
+}
+
+/* Layout Components */
+@layer components {
+    .hero-main {
+        @apply flex-1 flex flex-col items-center justify-center px-4 -mt-20;
+        background: radial-gradient(
+            ellipse at center,
+            var(--bg-secondary) 0%,
+            var(--bg-primary) 70%
+        );
+    }
+
+    /* Pixelated Search Input - Hero */
+    .search-input-hero {
+        @apply w-full pl-12 pr-24 py-4 text-lg transition-all duration-100;
+        background-color: var(--bg-card);
+        border: 3px solid var(--border-color);
+        color: var(--text-primary);
+        font-family: "VT323", monospace;
+        font-size: 1.25rem;
+        box-shadow: 4px 4px 0px var(--bg-secondary);
+        image-rendering: pixelated;
+    }
+
+    .search-input-hero:hover {
+        border-color: var(--accent-purple);
+        box-shadow:
+            4px 4px 0px var(--accent-purple),
+            var(--glow-purple);
+        transform: translate(-1px, -1px);
+    }
+
+    .search-input-hero:focus {
+        outline: none;
+        border-color: var(--accent-cyan);
+        box-shadow:
+            4px 4px 0px var(--accent-cyan),
+            var(--glow-blue);
+        background-color: var(--bg-hover);
+    }
+
+    /* Pixel Buttons */
+    .btn-hero {
+        @apply px-6 py-3 text-sm font-medium transition-all duration-100;
+        background-color: var(--bg-card);
+        border: 3px solid var(--border-color);
+        color: var(--text-primary);
+        font-family: "VT323", monospace;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        box-shadow: 3px 3px 0px var(--bg-secondary);
+        position: relative;
+    }
+
+    .btn-hero:hover {
+        background-color: var(--bg-hover);
+        border-color: var(--accent-purple);
+        color: var(--accent-cyan);
+        box-shadow:
+            3px 3px 0px var(--accent-purple),
+            var(--glow-purple);
+        transform: translate(-2px, -2px);
+    }
+
+    .btn-hero:active {
+        transform: translate(1px, 1px);
+        box-shadow: 1px 1px 0px var(--accent-purple);
+    }
+
+    /* Search Bar Icons */
+    .search-icon-left {
+        @apply absolute left-4 top-1/2 -translate-y-1/2;
+        color: var(--accent-purple);
+    }
+
+    .search-btn-right {
+        @apply absolute right-4 top-1/2 -translate-y-1/2 p-2;
+        color: var(--accent-cyan);
+        background-color: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        transition: all 0.1s;
+    }
+
+    .search-btn-right:hover {
+        background-color: var(--accent-purple);
+        color: var(--bg-primary);
+        border-color: var(--accent-cyan);
+        box-shadow: 0 0 10px var(--accent-purple);
+    }
+
+    .clear-btn-right {
+        @apply absolute right-16 top-1/2 -translate-y-1/2;
+        color: var(--text-muted);
+        transition: color 0.1s;
+    }
+
+    .clear-btn-right:hover {
+        color: var(--accent-pink);
+    }
+
+    /* Page Layout */
+    .page-wrapper {
+        background-color: var(--bg-primary);
+    }
+
+    .content-container {
+        @apply max-w-7xl mx-auto px-4;
+    }
+
+    /* Sticky Header - Cyberpunk Style */
+    .header-sticky {
+        @apply sticky top-0 z-50;
+        background-color: rgba(13, 2, 33, 0.95);
+        backdrop-filter: blur(4px);
+        border-bottom: 3px solid var(--border-color);
+        box-shadow: 0 4px 0px var(--bg-secondary);
+    }
+
+    .search-input-header {
+        @apply w-full pl-4 pr-12 py-2.5 transition-all duration-100;
+        background-color: var(--bg-card);
+        border: 2px solid var(--border-color);
+        color: var(--text-primary);
+        font-family: "VT323", monospace;
+        box-shadow: 2px 2px 0px var(--bg-secondary);
+    }
+
+    .search-input-header:hover {
+        border-color: var(--accent-purple);
+        box-shadow: 2px 2px 0px var(--accent-purple);
+    }
+
+    .search-input-header:focus {
+        outline: none;
+        border-color: var(--accent-cyan);
+        box-shadow:
+            2px 2px 0px var(--accent-cyan),
+            var(--glow-blue);
+        background-color: var(--bg-hover);
+    }
+
+    /* Filter Tabs - Pixel Style */
+    .filter-tab {
+        @apply pb-2 font-medium transition-all duration-100 flex items-center gap-2;
+        color: var(--text-secondary);
+        border-bottom: 3px solid transparent;
+        font-family: "VT323", monospace;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+
+    .filter-tab:hover {
+        color: var(--accent-cyan);
+        border-bottom-color: var(--accent-purple);
+        text-shadow: 0 0 5px var(--accent-purple);
+    }
+
+    .filter-tab.active {
+        color: var(--accent-cyan);
+        border-bottom-color: var(--accent-cyan);
+        text-shadow: 0 0 8px var(--accent-cyan);
+    }
+
+    /* Result Cards - Dark Pixel Cards */
+    .card-article {
+        @apply space-y-2 p-4 mb-4;
+        background-color: var(--bg-card);
+        border: 3px solid var(--border-color);
+        box-shadow: 4px 4px 0px var(--bg-secondary);
+        transition: all 0.1s;
+    }
+
+    .card-article:hover {
+        border-color: var(--accent-purple);
+        box-shadow:
+            4px 4px 0px var(--accent-purple),
+            var(--glow-purple);
+        transform: translate(-2px, -2px);
+    }
+
+    .card-favicon {
+        @apply w-6 h-6 flex items-center justify-center text-xs font-bold;
+        background-color: var(--bg-secondary);
+        border: 2px solid var(--border-color);
+        color: var(--accent-cyan);
+        image-rendering: pixelated;
+    }
+
+    .card-link-title {
+        @apply text-xl font-medium;
+        color: var(--accent-blue);
+        font-family: "VT323", monospace;
+        text-decoration: none;
+        text-shadow: 1px 1px 0px var(--bg-secondary);
+        transition: all 0.1s;
+    }
+
+    .card-link-title:hover {
+        color: var(--accent-cyan);
+        text-shadow: 0 0 8px var(--accent-cyan);
+        text-decoration: underline;
+        text-decoration-style: dashed;
+    }
+
+    .card-link-title:visited {
+        color: var(--accent-purple);
+    }
+
+    .card-description {
+        @apply text-sm leading-relaxed mb-2 break-words overflow-hidden;
+        color: var(--text-secondary);
+        font-family: "Courier New", monospace;
+    }
+
+    /* Pagination - Pixel Buttons */
+    .pagination-btn {
+        @apply px-4 py-2 text-sm font-medium transition-all duration-100 flex items-center gap-1;
+        background-color: var(--bg-card);
+        border: 2px solid var(--border-color);
+        color: var(--accent-blue);
+        font-family: "VT323", monospace;
+        box-shadow: 2px 2px 0px var(--bg-secondary);
+    }
+
+    .pagination-btn:hover {
+        background-color: var(--bg-hover);
+        border-color: var(--accent-purple);
+        color: var(--accent-cyan);
+        box-shadow: 2px 2px 0px var(--accent-purple);
+        transform: translate(-1px, -1px);
+    }
+
+    .pagination-btn:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        border-color: var(--text-muted);
+    }
+
+    /* Footer - Dark Theme */
+    footer {
+        background-color: var(--bg-secondary);
+        border-top: 3px solid var(--border-color);
+        color: var(--text-secondary);
+    }
+
+    footer a {
+        color: var(--accent-blue);
+        text-decoration: none;
+        transition: all 0.1s;
+    }
+
+    footer a:hover {
+        color: var(--accent-cyan);
+        text-shadow: 0 0 5px var(--accent-cyan);
+    }
+
+    /* No Results - Pixel Art Style */
+    .no-results-container {
+        @apply text-center py-16;
+    }
+
+    .no-results-icon {
+        color: var(--text-muted);
+        filter: drop-shadow(2px 2px 0px var(--bg-secondary));
+    }
+
+    /* Scrollbar - Pixel Style */
+    ::-webkit-scrollbar {
+        width: 12px;
+    }
+
+    ::-webkit-scrollbar-track {
+        background: var(--bg-primary);
+        border-left: 2px solid var(--border-color);
+    }
+
+    ::-webkit-scrollbar-thumb {
+        background: var(--bg-card);
+        border: 2px solid var(--border-color);
+        box-shadow: inset 0 0 0 1px var(--accent-purple);
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+        background: var(--accent-purple);
+        border-color: var(--accent-cyan);
+    }
+
+    /* Selection Color */
+    ::selection {
+        background-color: var(--accent-purple);
+        color: var(--bg-primary);
+    }
+}

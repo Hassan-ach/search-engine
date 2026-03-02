@@ -1,0 +1,46 @@
+package result
+
+import "github.com/Hassan-ach/boogle/services/engine/internal/model"
+import "github.com/Hassan-ach/boogle/services/engine/view/layout"
+import "github.com/Hassan-ach/boogle/services/engine/view/component"
+import "github.com/Hassan-ach/boogle/services/engine/view/page/result/tab"
+
+templ ShowAll(pages []*model.Page, totalPages, curentPage int,  isHtmx bool) {
+    if !isHtmx {
+        @layout.Base(){
+            <div class="page-wrapper">
+                @component.ResultHeader()
+                @tab.All(pages)
+            </div>
+
+        }
+    }else {
+        <div class="page-wrapper">
+            @tab.All(pages)
+        </div>
+    }
+    if len(pages) > 0 {
+        @component.Pagination(totalPages,curentPage)
+    }
+}
+
+templ ShowGraph(result any, isHtmx bool) {
+    @layout.Base(){
+        <div class="page-wrapper">
+        if !isHtmx {
+            @component.ResultHeader()
+        }
+        @tab.Graph()
+        </div>
+    }
+}
+templ ShowImages(result any,isHtmx bool) {
+    @layout.Base(){
+        <div class="page-wrapper">
+        if !isHtmx {
+            @component.ResultHeader()
+        }
+        @tab.Images()
+        </div>
+    }
+}

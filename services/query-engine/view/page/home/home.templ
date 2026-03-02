@@ -1,0 +1,50 @@
+package home
+import "github.com/Hassan-ach/boogle/services/engine/view/layout"
+import "github.com/Hassan-ach/boogle/services/engine/view/component"
+
+
+templ Show() {
+    @layout.Base(){
+        <main class="hero-main">
+                <div class="mb-8 text-center" x-data="{ hovered: false }">
+                    <h1 class="text-9xl font-bold mb-2 transition-all duration-300 jersey-10-regular ">
+                        @component.Logo()
+                    </h1>
+                </div>
+
+                <div class="w-full max-w-2xl">
+                    <form action="/search" method="GET" class="relative" id="search-form">
+                        <div class="relative group" x-data="{ query: '' }">
+                            <div class="search-icon-left">
+                                @component.SearchIcon("w-5 h-5")
+                            </div>
+
+                            <input
+                                type="text"
+                                name="query"
+                                x-model="query"
+                                class="search-input-hero"
+                                placeholder="Search the web..."
+                                autocomplete="off"
+                                required
+                            />
+
+                            <button type="button" class="clear-btn-right" @click="query = ''"  x-show="query.length > 0">
+                                @component.Xicon("w-5 h-5")
+                            </button>
+
+                            <button type="submit" class="search-btn-right" :disabled="query.trim().length === 0">
+                                @component.SearchIcon("w-6 h-6")
+                            </button>
+                        </div>
+                    </form>
+
+                    <div class="flex justify-center gap-3 mt-8">
+                        <button class="btn-hero" type="submit" form="search-form" >Boogle Search</button>
+                        <a class="btn-hero" href="https://github.com/Hassan-ach" target="_blank">Github</a>
+                        <button class="btn-hero" hx-get="/feeling-lucky" >I'm Feeling Lucky</button>
+                    </div>
+                </div>
+        </main>
+    }
+}

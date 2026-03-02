@@ -70,6 +70,7 @@ func LoadConfig(envPath string) (*Config, error) {
 		App:   loadAppConfig(),
 		Store: loadStoreConfig(),
 	}
+}
 
 	fmt.Printf("%+v\n", c)
 

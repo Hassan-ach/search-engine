@@ -1,0 +1,34 @@
+package layout
+
+templ Base() {
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+        <title>Boogle - Search Engine</title>
+        <link rel="stylesheet" href="/public/css/styles.css"/>
+    </head>
+    <body class="bg-[#0d0221] text-[#e0d5f5] font-['VT323']">
+        <div class="min-h-screen flex flex-col">
+            { children... }
+
+            <!-- Footer -->
+            <footer class="border-t-2 border-[#3d2c5e] bg-[#1a0b2e] mt-auto">
+            <div class="px-8 py-3 text-sm font-['VT323'] tracking-wider">
+                <div class="flex flex-col md:flex-row justify-between items-center gap-4">
+                    <div class="flex gap-6">
+                        <a href="https://github.com/Hassan-ach" target="_blank"  class="hover:text-[#00f5d4] hover:shadow-[0_0_5px_#00f5d4] transition-all">[ Github ]</a>
+                        <a href="#" class="hover:text-[#00f5d4] hover:shadow-[0_0_5px_#00f5d4] transition-all">[ LinkedIn ]</a>
+                    </div>
+                    <div class="text-[#6b5b95]">
+                        © 2026 BOOGLE_SEARCH.EXE
+                    </div>
+                </div>
+            </div>
+        </footer>
+        </div>
+        <script src="/public/js/index.js" defer></script>
+    </body>
+    </html>
+}

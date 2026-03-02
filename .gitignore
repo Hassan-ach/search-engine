@@ -1,3 +1,4 @@
+
 # === Common ===
 .DS_Store
 .idea/
@@ -13,7 +14,6 @@ data/
 *.txt
 *.png
 *.json
-
 # === Rust ===
 target/
 **/*.rs.bk
@@ -25,6 +25,9 @@ bin/
 build/
 dist/
 out/
+tmp/
+bin/
+public/
 coverage/
 *.test
 *.exe
@@ -33,6 +36,7 @@ coverage/
 *.so
 *.dylib
 *.out
+*_templ.go
 
 # === Python ===
 !requirements.txt

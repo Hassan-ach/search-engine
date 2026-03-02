@@ -1,0 +1,32 @@
+package util
+
+import (
+	"os"
+	"strconv"
+)
+
+func GetWithDefault(key, defaultValue string) string {
+	k := os.Getenv(key)
+	if k == "" {
+		return defaultValue
+	}
+	return k
+}
+
+func GetIntWithDefault(key string, defaultValue int) int {
+	k := GetWithDefault(key, "")
+	v, err := strconv.Atoi(k)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}
+
+func GetFloatWithDefault(key string, defaultValue float64) float64 {
+	k := GetWithDefault(key, "")
+	v, err := strconv.ParseFloat(k, 64)
+	if err != nil {
+		return defaultValue
+	}
+	return v
+}

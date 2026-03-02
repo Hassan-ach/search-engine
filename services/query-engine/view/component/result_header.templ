@@ -1,0 +1,94 @@
+package component
+
+templ ResultHeader() {
+    <header class="header-sticky">
+        <div class="content-container py-3" >
+            <div class="flex items-center gap-6">
+                <a href="/" class="shrink-0">
+                    <h1 class="text-9xl jersey-10-regular">
+                        @Logo()
+                    </h1>
+                </a>
+                <div class="flex-1 max-w-2xl relative" x-data="{query : ''}">
+                        <input 
+                        type="text" 
+                        name="query" 
+                        x-model="query" 
+                        hx-get="/search"
+                        hx-include="[name='query']"
+                        hx-trigger="keyup[key=='Enter'] changed delay:500ms"
+                        hx-target="#results"
+                        hx-push-url="true"
+                        class="search-input-header" 
+                        placeholder="Search..." 
+                        autocomplete="off" />
+                        <button 
+                            x-show="query.length > 0"
+                            @click="query = ''"
+                            class="absolute right-10 top-1/2 -translate-y-1/2 text-gray-400 cursor-pointer hover:text-gray-700">
+                            @Xicon("w-4 h-4")
+                        </button>
+                        <button 
+                        hx-get="/search"
+                        hx-include="[name='query']"
+                        hx-trigger="click"
+                        hx-target="#results"
+                        class="absolute right-3 top-1/2 -translate-y-1/2 text-blue-500">
+                            @SearchIcon("w-5 h-5")
+                        </button>
+                </div>
+            </div>
+            <div class="mt-3 flex gap-6 text-sm"  x-data="{
+                tab: new URLSearchParams(window.location.search).get('tab') || 'all',
+                goToTab(t) {
+                    const params = new URLSearchParams(window.location.search);
+                    params.set('tab', t);
+                    window.location.href = '/search?' + params.toString();
+                }
+                }">
+                <button
+                    @click="goToTab('all')"
+                    class="filter-tab cursor-pointer"
+                    hx-get="/search?tab=all"
+                    hx-trigger="click"
+                    hx-target="#results"
+                    hx-push-url="true"
+                    :class="tab == 'all' 
+                        ? 'text-blue-600 border-blue-600 pointer-events-none' 
+                        : 'text-gray-600 hover:text-gray-800 hover:border-gray-300'"
+                >
+                    @SearchIcon("w-4 h-4") All
+                </button>
+
+                <button
+                    @click="goToTab('images')"
+                    class="filter-tab cursor-pointer"
+                    hx-get="/search?tab=images"
+                    hx-trigger="click"
+                    hx-target="#results"
+                    hx-push-url="true"
+                    :class="tab == 'images'
+                        ? 'text-blue-600 border-blue-600 pointer-events-none'
+                        : 'text-gray-600 hover:text-gray-800 hover:border-gray-300'"
+                >
+                    @ImagesIcon("w-4 h-4") Images
+                </button>
+
+                <button
+                    @click="goToTab('graph')"
+                    class="filter-tab cursor-pointer"
+                    hx-get="/search?tab=graph"
+                    hx-trigger="click"
+                    hx-target="#results"
+                    hx-push-url="true"
+                    :class="tab == 'graph'
+                        ? 'text-blue-600 border-blue-600 pointer-events-none'
+                        : 'text-gray-600 hover:text-gray-800 hover:border-gray-300'"
+                >
+                    @GraphIcon("w-4 h-4") Graph
+                </button>
+
+            </div>
+        </div>
+    </header>
+}
