@@ -1,0 +1,7 @@
+default: dev
+
+dev:
+    cargo run
+
+build:
+    RUSTFLAGS="-C target-cpu=native" cargo build --release

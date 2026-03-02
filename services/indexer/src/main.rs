@@ -1,70 +1,127 @@
 mod core;
-use dotenv::from_path;
-use std::{error::Error, fs};
-use tracing::{level_filters::LevelFilter, Level};
 
-use tracing_subscriber::{filter::Targets, fmt, layer::SubscriberExt, util::SubscriberInitExt};
+use crate::core::config::load_config;
+use crate::core::indexer::Indexe;
+use crate::core::indexer::Indexer;
+use crate::core::psql::Psql;
+use slog::{error, info, o, Drain, Logger};
+use std::error::Error;
+use std::fs::OpenOptions;
+use std::io;
+use std::path::Path;
+use std::sync::Arc;
+use tokio::task::JoinHandle;
+use tokio::time::timeout;
 
-use crate::core::indexer::index;
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
+    let conf = load_config("../../.env".to_string());
+    let worker_count = conf.app.indexer_count.clone();
+    if worker_count == 0 {
+        panic!("INDEXER_COUNT must be greater than 0");
+    }
 
-async fn init() -> Result<(), Box<dyn Error>> {
-    //
-    from_path("../../.env").expect("cannot open .env file");
-    // Print the environment variables
-    println!(
-        "PG_HOST={}",
-        std::env::var("PG_HOST").unwrap_or("not set".to_string())
-    );
-    println!(
-        "PG_PORT={}",
-        std::env::var("PG_PORT").unwrap_or("not set".to_string())
-    );
-    println!(
-        "PG_USER={}",
-        std::env::var("PG_USER").unwrap_or("not set".to_string())
-    );
-    println!(
-        "PG_PASSWORD={}",
-        std::env::var("PG_PASSWORD").unwrap_or("not set".to_string())
-    );
-    println!(
-        "PG_DBNAME={}",
-        std::env::var("PG_DBNAME").unwrap_or("not set".to_string())
-    );
+    let log = init_logger(conf.app.log_path.clone().as_str())?;
+    info!(log, "Indexer service starting up"; "worker_count" => worker_count);
 
-    println!(
-        "DATABASE_URL={}",
-        std::env::var("DATABASE_URL").unwrap_or("not set".to_string())
-    );
+    let psql = Psql::new(conf.psql, log.clone()).await?;
+    let indx = Arc::new(Indexer::<Psql>::new(psql, conf.app, log.clone()));
 
-    let log_file = fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open("indexer.log")
-        .expect("cannot open log file");
+    let token = tokio_util::sync::CancellationToken::new();
+    let mut handles = Vec::<JoinHandle<()>>::new();
 
-    let writer = std::sync::Mutex::new(log_file);
+    // Start multiple indexer tasks
+    for i in 0..worker_count {
+        info!(log, "Starting indexer indexes"; "indexer_id" => i);
+        let token_clone = token.clone();
+        let job = indx.clone();
+        handles.push(tokio::spawn(async move {
+            job.start(token_clone).await;
+        }));
+    }
 
-    let filter = Targets::new()
-        .with_target("my_crate", Level::INFO)
-        .with_target("other_crate", LevelFilter::OFF);
+    let log_clone = log.clone();
+    let sig_handle = tokio::spawn(async move {
+        // listen for Ctrl-C signal
+        match tokio::signal::ctrl_c().await {
+            Ok(()) => {
+                info!(log_clone, "Ctrl-C received, sending shutdown signal");
+            }
+            Err(err) => {
+                error!(log_clone, "Failed to listen for Ctrl-C"; "error" => %err);
+            }
+        }
+    });
 
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_writer(writer).with_ansi(false).json())
-        .with(fmt::layer().with_writer(std::io::stdout).with_ansi(true))
-        .with(filter)
-        .init();
-    crate::core::psql::init().await;
+    // wait for signal handler to complete (which happens after Ctrl-C is received)
+    tokio::select! {
+        _ = sig_handle => {
+            info!(log, "Signal handler task completed");
+        }
+        _ = token.cancelled() => {
+            info!(log, "Cancellation token was cancelled");
+        }
+    }
+    token.cancel();
+
+    // wait for all indexer tasks to complete, but with a timeout to prevent hanging indefinitely
+    match timeout(std::time::Duration::from_secs(30), async {
+        for handle in handles {
+            if let Err(err) = handle.await {
+                error!(log, "Task failed to join"; "error" => %err);
+            }
+        }
+    })
+    .await
+    {
+        Ok(_) => info!(log, "All indexer tasks completed"),
+        Err(_) => info!(
+            log,
+            "Timeout reached while waiting for indexer tasks to complete"
+        ),
+    }
+
+    info!(log, "Indexer service shutting down");
+
     Ok(())
 }
 
-// TODO:
-// [] fix logger.
-// [] impl concurrency.
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
-    init().await?;
-    println!("Staring Indexing...");
-    index().await;
-    Ok(())
+pub fn init_logger(log_file: &str) -> io::Result<Logger> {
+    // Create log directory
+    if let Some(parent) = Path::new(log_file).parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Terminal: Pretty, colored output
+    let term = slog_term::TermDecorator::new()
+        .stderr()
+        .force_color()
+        .build();
+    let term_drain = slog_term::FullFormat::new(term)
+        .use_local_timestamp()
+        .build()
+        .fuse();
+
+    // File: JSON format
+    let file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(log_file)?;
+
+    let json_drain = slog_json::Json::new(file)
+        .add_default_keys()
+        .add_key_value(slog::o!(
+            "service" => "indexer",
+        ))
+        .build()
+        .fuse();
+
+    // Combine both - logs go to terminal AND file
+    let drain = slog::Duplicate::new(term_drain, json_drain).fuse();
+
+    // Wrap in Arc for thread-safe sharing across Tokio tasks
+    // slog_async makes it non-blocking
+    let async_drain = slog_async::Async::new(drain).chan_size(1024).build();
+
+    Ok(Logger::root(Arc::new(async_drain).fuse(), o!()))
 }
