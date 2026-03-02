@@ -37,4 +37,4 @@ tidy:
     go mod tidy
 
 build-emb: tailwind-build-prod js-prod templ-generate
-    CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o boogle ./cmd/server
+    CGO_ENABLED=1 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o boogle ./cmd/server

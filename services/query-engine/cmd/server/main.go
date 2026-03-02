@@ -1,6 +1,8 @@
 package main
 
 import (
+	"embed"
+
 	"query-engine/internal/config"
 	"query-engine/internal/handlers"
 	"query-engine/internal/service/ranking"
@@ -8,8 +10,10 @@ import (
 	"query-engine/internal/store"
 
 	"github.com/labstack/echo/v5"
-	"github.com/labstack/echo/v5/middleware"
+	echoMiddleware "github.com/labstack/echo/v5/middleware"
 )
+
+var embeddedFiles embed.FS
 
 func main() {
 	conf, err := config.LoadConfig("../../.env")
@@ -29,7 +33,15 @@ func main() {
 	rankingHandler := handlers.NewSearchHandler(store, ranker, speller)
 
 	e := echo.New()
-	e.Use(middleware.RequestLogger())
+
+	e.HTTPErrorHandler = handlers.HandleError
+	e.Use(echoMiddleware.Recover())
+	e.Use(echoMiddleware.RequestID())
+	e.Use(echoMiddleware.RequestLogger())
+	// e.Use(echoMiddleware.CORS())
+	// e.Use(echoMiddleware.Secure())
+	e.Use(echoMiddleware.GzipWithConfig(echoMiddleware.GzipConfig{Level: 5}))
+	e.Use(echoMiddleware.RateLimiter(echoMiddleware.NewRateLimiterMemoryStore(20)))
 
 	e.Static("/public", "public")
 	e.GET("/", homeHandler.Handle)
