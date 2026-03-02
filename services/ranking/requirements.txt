@@ -1,0 +1,5 @@
+psycopg2-binary>=2.9.10
+python-dotenv==1.0.0
+apscheduler==3.10.4
+numpy==1.26.3
+scipy>=1.10.0

@@ -1,0 +1,20 @@
+venv := "venv"
+python := "venv/bin/python"
+pip := "venv/bin/pip"
+
+default: run
+
+venv:
+    python3 -m venv {{venv}}
+
+# Install dependencies
+install: venv
+    {{pip}} install --upgrade pip
+    {{pip}} install -r requirements.txt
+
+run:
+    {{python}} src/main.py
+
+
+clean:
+    rm -rf {{venv}} __pycache__ src/__pycache__
