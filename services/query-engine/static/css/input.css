@@ -2,7 +2,7 @@
 @import "tailwindcss";
 @font-face {
     font-family: "Jersey10";
-    src: url("/public/fonts/Jersey10-Regular.ttf") format("truetype");
+    src: url("/static/fonts/Jersey10-Regular.ttf") format("truetype");
     font-weight: normal;
     font-style: normal;
     font-display: swap;
@@ -10,7 +10,7 @@
 
 @font-face {
     font-family: "VT323";
-    src: url("/public/fonts/VT323.woff2") format("woff2");
+    src: url("/static/fonts/VT323.woff2") format("woff2");
     font-weight: normal;
     font-style: normal;
     font-display: swap;
