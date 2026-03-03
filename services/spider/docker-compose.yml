@@ -1,0 +1,7 @@
+services:
+  spider:
+    build: .
+    container_name: spider
+    restart: unless-stopped
+    env_file:
+      - .env

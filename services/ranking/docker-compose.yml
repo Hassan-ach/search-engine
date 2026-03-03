@@ -1,0 +1,7 @@
+services:
+  ranking:
+    build: .
+    container_name: ranking
+    restart: unless-stopped
+    env_file:
+      - .env

@@ -1,0 +1,7 @@
+services:
+  indexer:
+    build: .
+    container_name: indexer
+    restart: unless-stopped
+    env_file:
+      - .env

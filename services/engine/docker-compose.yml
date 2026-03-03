@@ -1,0 +1,9 @@
+services:
+  engine:
+    build: .
+    container_name: engine
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - 1213:1213

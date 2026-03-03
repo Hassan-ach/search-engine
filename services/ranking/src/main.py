@@ -14,7 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         payload = {
-            "service": "backlinks",
+            "service": "ranking",
             "timestamp": self.formatTime(record, datefmt="%Y-%m-%dT%H:%M:%S"),
             "level": record.levelname,
             "logger": record.name,
@@ -32,7 +32,7 @@ def configure_logging() -> None:
         return
 
     handlers: list[logging.Handler] = [
-        logging.FileHandler("backlinks.log"),
+        logging.FileHandler("ranking.log"),
         logging.StreamHandler(),
     ]
     formatter = JsonFormatter()
@@ -89,7 +89,7 @@ async def run_idf():
 
 async def main():
     configure_logging()
-    load_dotenv("../../.env")
+    load_dotenv()
     
     # Validate environment variables
     try:
@@ -154,7 +154,7 @@ async def main():
 if __name__ == "__main__":
     try:
         configure_logging()
-        logger.info("Starting Backlinks Service...")
+        logger.info("Starting ranking Service...")
         asyncio.run(main())
     except KeyboardInterrupt:
         logger.info("Service stopped by user")

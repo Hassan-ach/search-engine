@@ -16,10 +16,7 @@ import (
 var embeddedFiles embed.FS
 
 func main() {
-	conf, err := config.LoadConfig("../../.env")
-	if err != nil {
-		panic("failed to load config: " + err.Error())
-	}
+	conf, _ := config.LoadConfig()
 
 	store := store.NewStore(conf.Store)
 

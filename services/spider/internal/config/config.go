@@ -5,8 +5,6 @@ import (
 	"os"
 	"strconv"
 	"time"
-
-	"github.com/joho/godotenv"
 )
 
 type RedisConfig struct {
@@ -54,18 +52,7 @@ type Config struct {
 	Store StoreConfig
 }
 
-func LoadConfig(envPath string) (*Config, error) {
-	var err error
-
-	if envPath == "" {
-		err = godotenv.Load()
-	} else {
-		err = godotenv.Load(envPath)
-	}
-	if err != nil {
-		panic(fmt.Sprintf("Failed to load .env file: %v", err))
-	}
-
+func LoadConfig() (*Config, error) {
 	c := &Config{
 		App:   loadAppConfig(),
 		Store: loadStoreConfig(),

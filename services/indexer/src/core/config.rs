@@ -25,7 +25,10 @@ pub struct AppConfig {
 }
 
 pub fn load_config(env_path: String) -> Config {
-    from_path(env_path).expect("cannot open .env file");
+    if let Err(e) = from_path(&env_path) {
+        eprintln!("Could not load .env file: {}", e);
+    }
+
     let app = load_app_config();
     let psql = load_psql_config();
     Config { app, psql }

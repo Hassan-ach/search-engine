@@ -15,7 +15,7 @@ use tokio::time::timeout;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
-    let conf = load_config("../../.env".to_string());
+    let conf = load_config(".env".to_string());
     let worker_count = conf.app.indexer_count.clone();
     if worker_count == 0 {
         panic!("INDEXER_COUNT must be greater than 0");

@@ -15,10 +15,7 @@ type Spider struct {
 }
 
 func main() {
-	conf, err := config.LoadConfig("")
-	if err != nil {
-		panic(fmt.Sprintf("Failed to load config: %v", err))
-	}
+	conf, _ := config.LoadConfig()
 
 	spider := spider.NewSpider(conf)
 	defer func() {
