@@ -1,5 +1,5 @@
 services:
-  db:
+  psql:
     image: postgres
     container_name: psql
     volumes:
@@ -10,7 +10,7 @@ services:
       POSTGRES_DB: ${PG_DBNAME}
     ports:
       - "${PG_PORT}:5432"
-  cache:
+  redis:
     image: redis
     container_name: redis
     ports:
@@ -20,3 +20,13 @@ services:
     restart: always
     ports:
       - 8080:8080
+  spider:
+    image: spider-spider:latest
+    container_name: spider-se
+    restart: always
+    env_file:
+      - ./services/spider/.env
+      - .env
+    depends_on:
+      - psql
+      - redis
