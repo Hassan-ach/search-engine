@@ -7,7 +7,6 @@ data/
 .scannerwork/
 *.log
 .env
-*.html
 *.svg
 *.txt
 *.png
