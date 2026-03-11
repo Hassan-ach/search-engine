@@ -39,6 +39,7 @@ FROM alpine:3.23
 WORKDIR /app
 
 COPY --from=go-builder /app/boogle .
+COPY --from=builder /app/public ./public
 
 RUN apk add --no-cache aspell aspell-en
 

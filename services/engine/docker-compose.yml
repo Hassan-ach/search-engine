@@ -6,4 +6,9 @@ services:
     env_file:
       - .env
     ports:
-      - 1213:1213
+      - "1323:1323"
+    networks:
+      - search_net
+networks:
+  search_net:
+    external: true

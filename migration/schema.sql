@@ -11,7 +11,9 @@ CREATE TABLE pages (
     url_id UUID UNIQUE NOT NULL REFERENCES urls(id) ON DELETE CASCADE,
     html TEXT NOT NULL,
     metadata JSONB NOT NULL DEFAULT '{}',
-    indexed BOOLEAN NOT NULL DEFAULT FALSE
+    indexed BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 CREATE TABLE words (
@@ -37,7 +39,15 @@ CREATE TABLE graph_edges (
 
 CREATE TABLE page_rank (
     url_id UUID PRIMARY KEY REFERENCES urls(id) ON DELETE CASCADE,
-    score   DOUBLE PRECISION NOT NULL
+    score   DOUBLE PRECISION NOT NULL,
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Monitor orchestrator state
+CREATE TABLE IF NOT EXISTS monitor_state (
+  key TEXT PRIMARY KEY,
+  value BIGINT NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- CREATE TABLE image_page (

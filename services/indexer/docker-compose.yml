@@ -2,6 +2,10 @@ services:
   indexer:
     build: .
     container_name: indexer
-    restart: unless-stopped
     env_file:
       - .env
+    networks:
+      - search_net
+networks:
+  search_net:
+    external: true
