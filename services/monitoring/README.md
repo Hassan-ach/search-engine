@@ -25,7 +25,7 @@ Open http://localhost:7070
 - `src/redis/client.ts` - Redis singleton with reconnect strategy
 - `src/db/queries.ts` - Metric queries against PostgreSQL
 - `src/metrics/http.ts` - Express router: `/metrics`, `/health`, static dashboard
-- `public/` - Live dashboard (HTML/CSS/JS, no build step)
+- `static/` - Live dashboard (HTML/CSS/JS, no build step)
 
 ## Commands
 
@@ -97,7 +97,7 @@ CLEANUP_EVERY_N_TICKS=4
 
 ## Dashboard
 
-The compiled dashboard lives in `public/` and is served statically at `/`.  
+The compiled dashboard lives in `static/` and is served statically at `/`.  
 It polls `/metrics` every 5 seconds and renders live status cards for every service.
 
 ## Docker

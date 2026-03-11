@@ -5,12 +5,12 @@ import { getSnapshot } from "./registry.js";
 
 export const metricsRouter = express.Router();
 
-metricsRouter.use(express.static(path.join(MONITORING_ROOT, "public")));
+metricsRouter.use(express.static(path.join(MONITORING_ROOT, "static")));
 
 metricsRouter.get("/metrics", (_req, res) => {
-  res.json(getSnapshot());
+    res.json(getSnapshot());
 });
 
 metricsRouter.get("/health", (_req, res) => {
-  res.json({ status: "ok", ts: new Date().toISOString() });
+    res.json({ status: "ok", ts: new Date().toISOString() });
 });
