@@ -5,42 +5,71 @@ A 2000s-style search engine built for educational purposes.
 ## Quick Start
 
 ```bash
-# Start all services
-docker-compose up
+# Copy and configure environment
+cp .env.example .env
+
+# Deploy everything (creates network, builds images, starts all services)
+./deploy.sh
 
 # Open browser
 open http://localhost:1323
+
+# Live monitoring dashboard
+open http://localhost:7070
 ```
 
 ## Services
 
-- **Engine** ([services/engine/](services/engine/)) - Web interface & query handler
-- **Spider** ([services/spider/](services/spider/)) - Web crawler
-- **Indexer** ([services/indexer/](services/indexer/)) - Converts HTML to searchable index
-- **Ranking** ([services/ranking/](services/ranking/)) - Calculates page scores (TF-IDF, PageRank)
+| Service | Language | Purpose |
+|---------|----------|---------|
+| [Engine](services/engine/) | Go | Web interface, query handling, search results |
+| [Spider](services/spider/) | Go | Web crawler, link discovery |
+| [Indexer](services/indexer/) | Rust | HTML parsing, word extraction, TF calculation |
+| [Ranking](services/ranking/) | Python | TF-IDF and PageRank scoring |
+| [Monitoring](services/monitoring/) | TypeScript | Service orchestration, health checks, live dashboard |
+
+## Pipeline
+
+```
+Web → Spider → Indexer → Ranking → Engine → User
+                              ↑
+                         Monitoring (watches & restarts all)
+```
 
 ## Requirements
 
-- Docker & Docker Compose
-- PostgreSQL (via docker-compose)
-- Redis (via docker-compose)
+- Docker & Docker Compose V2
+- Git
+
+All other dependencies (PostgreSQL, Redis, language runtimes) run inside containers.
 
 ## Setup
 
-1. Copy `.env.example` to `.env` and customize if needed
-2. Run `docker-compose up`
-3. Visit http://localhost:1323
+1. Clone the repo and `cd` into it
+2. Copy `.env.example` to `.env` and fill in real secrets
+3. Copy each `services/<svc>/.env.example` to `services/<svc>/.env`
+4. Run `./deploy.sh`
+
+For a full teardown and clean rebuild:
+
+```bash
+./deploy.sh --pull --build --restart
+```
 
 ## Docs
 
-- [Services Overview](services/README.md) - Service details
-- [docs/](docs/) - Detailed documentation for each service
+- [Services Overview](services/README.md) — service responsibilities and data flow
+- [docs/ENGINE.md](docs/ENGINE.md) — search architecture and templates
+- [docs/SPIDER.md](docs/SPIDER.md) — crawling algorithm and database schema
+- [docs/INDEXER.md](docs/INDEXER.md) — TF calculation and word extraction
+- [docs/RANKING.md](docs/RANKING.md) — PageRank math and IDF scoring
+- [docs/MONITORING.md](docs/MONITORING.md) — tick lifecycle, policy engine, metrics API
 
 ## Development
 
-See individual service READMEs in [services/](services/) directory.
+See individual service READMEs in [services/](services/) for language-specific build commands.
 
 ---
 
-**Status**: Learning project - not for production
+**Status**: Learning project — not for production  
 **License**: MIT
