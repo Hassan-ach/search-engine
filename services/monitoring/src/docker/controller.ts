@@ -54,6 +54,29 @@ export async function ensureServicesUp(
   );
 }
 
+/** Scale a service to an exact replica count via --scale. */
+export async function scaleService(
+  composePath: string,
+  service: string,
+  count: number
+): Promise<void> {
+  await dockerMutex.run(() =>
+    withRetry(
+      async () => {
+        await runDockerCompose(composePath, [
+          "up", "-d", "--scale", `${service}=${count}`,
+        ]);
+        logger.info({ composePath, service, count }, "service scaled");
+      },
+      {
+        maxAttempts: 4,
+        baseDelayMs: 1000,
+        label: `scaleService(${service}=${count})`,
+      }
+    )
+  );
+}
+
 export async function runOneOffJob(
   composePath: string,
   service: string,

@@ -1,4 +1,5 @@
 import http from "node:http";
+import https from "node:https";
 import { ensureServiceUp, isContainerRunning } from "../docker/controller.js";
 import { services } from "../docker/compose.js";
 import { logger } from "../logger/logger.js";
@@ -73,11 +74,12 @@ export class EngineGuardian {
     }
   }
 
-  private _httpProbe(url: string): Promise<boolean> {
+  private _httpProbe(probeUrl: string): Promise<boolean> {
     return new Promise((resolve) => {
       const timeout = setTimeout(() => resolve(false), 3000);
-      http
-        .get(url, (res) => {
+      const transport = new URL(probeUrl).protocol === "https:" ? https : http;
+      transport
+        .get(probeUrl, (res) => {
           clearTimeout(timeout);
           resolve((res.statusCode ?? 500) < 500);
           res.resume();

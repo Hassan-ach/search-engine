@@ -1,10 +1,11 @@
-import { collectDbMetrics } from "../db/inspector.js";
+import { collectDbMetrics, type DbMetrics } from "../db/inspector.js";
 import { getCrawlQueueSize } from "../redis/inspector.js";
 import { monitorStateGet, monitorStateSet } from "../db/queries.js";
 import {
   ensureServiceUp,
   ensureServicesUp,
   runOneOffJob,
+  scaleService,
   countRunningJobsByImage,
 } from "../docker/controller.js";
 import { services } from "../docker/compose.js";
@@ -57,10 +58,17 @@ export class Scheduler {
     gauge("scheduler_tick_count", tickNo, "current scheduler tick number");
 
     try {
-      await this._ensureBaseline();
-      await this._tickIndexer();
-      await this._tickSpider();
-      await this._tickRanking();
+      // Throttle baseline check to first tick and every CLEANUP_EVERY_N_TICKS ticks
+      if (tickNo === 1 || tickNo % config.CLEANUP_EVERY_N_TICKS === 0) {
+        await this._ensureBaseline();
+      }
+
+      // Collect DB metrics once and share across all tick handlers
+      const dbMetrics = await collectDbMetrics();
+
+      await this._tickIndexer(dbMetrics);
+      await this._tickSpider(dbMetrics);
+      await this._tickRanking(dbMetrics);
 
       if (tickNo % config.CLEANUP_EVERY_N_TICKS === 0) {
         await this.cleanup.run();
@@ -87,9 +95,8 @@ export class Scheduler {
     }
   }
 
-  private async _tickIndexer(): Promise<void> {
-    const [dbMetrics, runningJobs, rawLastSpawn] = await Promise.all([
-      collectDbMetrics(),
+  private async _tickIndexer(dbMetrics: DbMetrics): Promise<void> {
+    const [runningJobs, rawLastSpawn] = await Promise.all([
       countRunningJobsByImage(
         services.indexer.compose,
         services.indexer.service
@@ -120,10 +127,9 @@ export class Scheduler {
     }
   }
 
-  private async _tickSpider(): Promise<void> {
-    const [dbMetrics, crawlQueueSize, runningSpiders, rawLastSpawn] =
+  private async _tickSpider(dbMetrics: DbMetrics): Promise<void> {
+    const [crawlQueueSize, runningSpiders, rawLastSpawn] =
       await Promise.all([
-        collectDbMetrics(),
         getCrawlQueueSize(),
         countRunningJobsByImage(services.spider.compose, services.spider.service),
         monitorStateGet(STATE_LAST_SPIDER_SPAWN),
@@ -149,16 +155,19 @@ export class Scheduler {
     logger.debug({ decision }, "spider policy");
 
     if (decision.shouldSpawn) {
-      await ensureServiceUp(services.spider.compose, services.spider.service);
+      const targetCount =
+        runningSpiders < config.SPIDER_MIN_INSTANCES
+          ? config.SPIDER_MIN_INSTANCES
+          : Math.min(runningSpiders + 1, config.SPIDER_MAX_INSTANCES);
+      await scaleService(services.spider.compose, services.spider.service, targetCount);
       await monitorStateSet(STATE_LAST_SPIDER_SPAWN, BigInt(Date.now()));
       counter("spider_instances_started_total", "total spider instances started");
-      logger.info({ reason: decision.reason }, "spider instance started");
+      logger.info({ reason: decision.reason, targetCount }, "spider scaled");
     }
   }
 
-  private async _tickRanking(): Promise<void> {
-    const [dbMetrics, runningJobs, lastRankingIndexed] = await Promise.all([
-      collectDbMetrics(),
+  private async _tickRanking(dbMetrics: DbMetrics): Promise<void> {
+    const [runningJobs, lastRankingIndexed] = await Promise.all([
       countRunningJobsByImage(services.ranking.compose, services.ranking.service),
       monitorStateGet(STATE_LAST_RANKING_INDEXED),
     ]);
