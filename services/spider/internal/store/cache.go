@@ -132,6 +132,25 @@ func (c *RedisClient) GetUrl(ctx context.Context) (string, bool, error) {
 }
 
 // AddUrls adds multiple URLs to Redis sorted set.
+// func (c *RedisClient) AddUrls(ctx context.Context, urls []string) error {
+// 	if len(urls) == 0 {
+// 		return nil
+// 	}
+//
+// 	pipe := c.conn.Pipeline()
+//
+// 	for _, u := range urls {
+// 		pipe.ZIncrBy(ctx, "urls", 1, u)
+// 	}
+//
+// 	_, err := pipe.Exec(ctx)
+// 	if err != nil {
+// 		return fmt.Errorf("add URLs: %w", err)
+// 	}
+//
+// 	return nil
+// }
+
 func (c *RedisClient) AddUrls(ctx context.Context, urls []string) error {
 	if len(urls) == 0 {
 		return nil
@@ -139,16 +158,30 @@ func (c *RedisClient) AddUrls(ctx context.Context, urls []string) error {
 
 	pipe := c.conn.Pipeline()
 
-	for _, u := range urls {
-		pipe.ZIncrBy(ctx, "urls", 1, u)
+	cmds := make([]*redis.BoolCmd, len(urls))
+	for i, u := range urls {
+		cmds[i] = pipe.SIsMember(ctx, "visitedUrls", u)
+	}
+
+	if _, err := pipe.Exec(ctx); err != nil {
+		return err
+	}
+
+	pipe = c.conn.Pipeline()
+
+	for i, u := range urls {
+		visited, err := cmds[i].Result()
+		if err != nil {
+			return err
+		}
+
+		if !visited {
+			pipe.ZIncrBy(ctx, "urls", 1, u)
+		}
 	}
 
 	_, err := pipe.Exec(ctx)
-	if err != nil {
-		return fmt.Errorf("add URLs: %w", err)
-	}
-
-	return nil
+	return err
 }
 
 // AddToVisitedUrl adds a URL to the visitedUrls set.
@@ -176,4 +209,13 @@ func (c *RedisClient) AddToWaitedHost(ctx context.Context, h string, delay int) 
 		return fmt.Errorf("add to waited host: %w", err)
 	}
 	return nil
+}
+
+// CountUrls returns the number of URLs in the sorted set.
+func (c *RedisClient) CountUrls(ctx context.Context) int64 {
+	count, err := c.conn.ZCard(ctx, "urls").Result()
+	if err != nil {
+		return 0
+	}
+	return count
 }

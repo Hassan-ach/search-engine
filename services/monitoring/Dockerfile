@@ -25,6 +25,7 @@ WORKDIR /app
 
 COPY --from=builder /build/node_modules ./node_modules
 COPY --from=builder /build/dist        ./dist
+COPY public/ ./public/
 COPY package.json ./
 
 ENV NODE_ENV=production

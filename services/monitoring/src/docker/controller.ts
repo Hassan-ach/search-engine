@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import path from "node:path";
 import { promisify } from "node:util";
 import { MONITORING_ROOT } from "../config/env.js";
 import { logger } from "../logger/logger.js";
@@ -138,12 +139,21 @@ export async function countRunningJobsByImage(
   service: string
 ): Promise<number> {
   try {
+    const composeProject = path.basename(path.dirname(composePath));
     const result = await execFileAsync(
       "docker",
-      ["compose", "-f", composePath, "ps", "--format", "json"],
+      [
+        "ps",
+        "--filter",
+        `label=com.docker.compose.service=${service}`,
+        "--filter",
+        `label=com.docker.compose.project=${composeProject}`,
+        "--format",
+        "{{json .}}",
+      ],
       { cwd: MONITORING_ROOT }
     );
-    const entries = result.stdout
+    return result.stdout
       .split("\n")
       .filter(Boolean)
       .map((l) => {
@@ -153,13 +163,8 @@ export async function countRunningJobsByImage(
           return null;
         }
       })
-      .filter(Boolean) as DockerPsEntry[];
-
-    return entries.filter(
-      (e) =>
-        e["Service"] === service &&
-        (e["State"] === "running" || e["Status"]?.includes("Up"))
-    ).length;
+      .filter((e): e is DockerPsEntry => e !== null)
+      .filter((e) => (e["Status"] as string | undefined)?.includes("Up")).length;
   } catch {
     return 0;
   }

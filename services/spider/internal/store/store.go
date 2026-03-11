@@ -18,6 +18,7 @@ type Cache interface {
 	AddUrls(ctx context.Context, urls []string) error
 	MarkVisited(ctx context.Context, u string) error
 	AddToWaitedHost(ctx context.Context, h string, delay int) error
+	CountUrls(ctx context.Context) int64
 	Close()
 }
 type DB interface {
@@ -126,6 +127,9 @@ func (s *Store) GetHostMetaData(ctx context.Context, h string) (*entity.Host, bo
 }
 
 func (s *Store) Init(starters []string) error {
+	if s.cache.CountUrls(context.Background()) > 0 {
+		return nil
+	}
 	err := s.cache.AddUrls(context.Background(), starters)
 	if err != nil {
 		return err
