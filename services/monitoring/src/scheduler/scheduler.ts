@@ -5,7 +5,6 @@ import {
   ensureServiceUp,
   ensureServicesUp,
   runOneOffJob,
-  scaleService,
   countRunningJobsByImage,
 } from "../docker/controller.js";
 import { services } from "../docker/compose.js";
@@ -154,15 +153,27 @@ export class Scheduler {
 
     logger.debug({ decision }, "spider policy");
 
-    if (decision.shouldSpawn) {
-      const targetCount =
-        runningSpiders < config.SPIDER_MIN_INSTANCES
-          ? config.SPIDER_MIN_INSTANCES
-          : Math.min(runningSpiders + 1, config.SPIDER_MAX_INSTANCES);
-      await scaleService(services.spider.compose, services.spider.service, targetCount);
+    if (decision.shouldSpawn && runningSpiders < config.SPIDER_MAX_INSTANCES) {
+      if (runningSpiders < config.SPIDER_MIN_INSTANCES) {
+        // Baseline spider uses compose service mode (single container).
+        await ensureServiceUp(services.spider.compose, services.spider.service);
+      } else {
+        // For burst capacity, run short-lived one-off spiders because
+        // `container_name` in spider compose prevents `--scale`.
+        await runOneOffJob(services.spider.compose, services.spider.service);
+      }
       await monitorStateSet(STATE_LAST_SPIDER_SPAWN, BigInt(Date.now()));
       counter("spider_instances_started_total", "total spider instances started");
-      logger.info({ reason: decision.reason, targetCount }, "spider scaled");
+      logger.info(
+        {
+          reason: decision.reason,
+          mode:
+            runningSpiders < config.SPIDER_MIN_INSTANCES
+              ? "service-up"
+              : "one-off-job",
+        },
+        "spider instance started"
+      );
     }
   }
 

@@ -43,6 +43,13 @@ CREATE TABLE page_rank (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
+-- Monitor orchestrator state
+CREATE TABLE IF NOT EXISTS monitor_state (
+  key TEXT PRIMARY KEY,
+  value BIGINT NOT NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
 -- CREATE TABLE image_page (
 --     image_url TEXT NOT NULL,
 --     page_id  UUID NOT NULL,
@@ -62,13 +69,6 @@ CREATE INDEX idx_graph_edges_to_page ON graph_edges(to_url);
 CREATE UNIQUE INDEX idx_graph_edges_unique ON graph_edges(from_url, to_url);
 CREATE UNIQUE INDEX idx_graph_edges_unique_revese ON graph_edges(to_url, from_url);
 CREATE INDEX idx_page_rank_score ON page_rank(score DESC);
-
--- Monitor orchestrator state
-CREATE TABLE IF NOT EXISTS monitor_state (
-  key TEXT PRIMARY KEY,
-  value BIGINT NOT NULL,
-  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
 
 -- CREATE INDEX idx_image_page_image_url ON image_page(image_url);
 --
